@@ -22,6 +22,8 @@ interface Zone {
   multiplier: number;
   fixed_price: number;
   pricing_type: string;
+  color: string;
+  coordinates: [number, number][];
 }
 
 interface AddressSelectionProps {
@@ -48,7 +50,8 @@ const AddressSelection = ({ service, onAddressSelect }: AddressSelectionProps) =
     latitude: number;
     longitude: number;
   } | null>(null);
-  const [zone, setZone] = useState<Zone | null>(null);
+  const [zones, setZones] = useState<Zone[]>([]);
+  const [selectedZone, setSelectedZone] = useState<Zone | null>(null);
   const [finalPrice, setFinalPrice] = useState(service.base_price);
   const [loading, setLoading] = useState(false);
   const [googleApiKey, setGoogleApiKey] = useState("");
@@ -58,16 +61,16 @@ const AddressSelection = ({ service, onAddressSelect }: AddressSelectionProps) =
 
   useEffect(() => {
     fetchApiKeys();
+    fetchZones();
   }, []);
 
   useEffect(() => {
     if (selectedLocation) {
       checkZone(selectedLocation.latitude, selectedLocation.longitude);
     }
-  }, [selectedLocation]);
+  }, [selectedLocation, zones]);
 
   useEffect(() => {
-    // Allow continue if user has typed an address, even without map confirmation
     setCanContinue(address.trim().length > 0 || selectedLocation !== null);
   }, [address, selectedLocation]);
 
@@ -94,7 +97,6 @@ const AddressSelection = ({ service, onAddressSelect }: AddressSelectionProps) =
       if (mapboxData?.api_key) {
         setMapboxToken(mapboxData.api_key);
       } else {
-        // Fallback token
         setMapboxToken('pk.eyJ1IjoiYWxleGlzbWVuZG96YXZlIiwiYSI6ImNtY21vMmpydTBuZ2QybG9uMmRud3VqZW8ifQ.QuPR_Yee1i2pPqm2MMajLA');
       }
     } catch (error) {
@@ -102,6 +104,26 @@ const AddressSelection = ({ service, onAddressSelect }: AddressSelectionProps) =
       setMapboxToken('pk.eyJ1IjoiYWxleGlzbWVuZG96YXZlIiwiYSI6ImNtY21vMmpydTBuZ2QybG9uMmRud3VqZW8ifQ.QuPR_Yee1i2pPqm2MMajLA');
     } finally {
       setMapLoading(false);
+    }
+  };
+
+  const fetchZones = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('zones')
+        .select('*')
+        .eq('is_active', true);
+
+      if (error) throw error;
+      
+      const zonesWithCoords = (data || []).map(zone => ({
+        ...zone,
+        coordinates: zone.coordinates as [number, number][] || []
+      }));
+      
+      setZones(zonesWithCoords);
+    } catch (error) {
+      console.error('Error fetching zones:', error);
     }
   };
 
@@ -115,21 +137,96 @@ const AddressSelection = ({ service, onAddressSelect }: AddressSelectionProps) =
       map.current = new mapboxgl.Map({
         container: mapContainer.current,
         style: 'mapbox://styles/mapbox/streets-v12',
-        center: [-99.1332, 19.4326], // Default to Mexico City
+        center: [-99.1332, 19.4326],
         zoom: 10,
       });
 
       map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
+      // Handle map load
+      map.current.on('load', () => {
+        // Add zones to map
+        zones.forEach((zone) => {
+          if (zone.coordinates && zone.coordinates.length > 0) {
+            const polygonCoordinates = [...zone.coordinates, zone.coordinates[0]];
+            
+            map.current?.addSource(`zone-${zone.id}`, {
+              type: 'geojson',
+              data: {
+                type: 'Feature',
+                properties: {
+                  zoneId: zone.id,
+                  name: zone.name,
+                  pricing_type: zone.pricing_type,
+                  multiplier: zone.multiplier,
+                  fixed_price: zone.fixed_price
+                },
+                geometry: {
+                  type: 'Polygon',
+                  coordinates: [polygonCoordinates]
+                }
+              }
+            });
+
+            // Add fill layer
+            map.current?.addLayer({
+              id: `zone-fill-${zone.id}`,
+              type: 'fill',
+              source: `zone-${zone.id}`,
+              paint: {
+                'fill-color': zone.color || '#3B82F6',
+                'fill-opacity': selectedZone?.id === zone.id ? 0.6 : 0.3
+              }
+            });
+
+            // Add border layer
+            map.current?.addLayer({
+              id: `zone-border-${zone.id}`,
+              type: 'line',
+              source: `zone-${zone.id}`,
+              paint: {
+                'line-color': zone.color || '#3B82F6',
+                'line-width': selectedZone?.id === zone.id ? 3 : 2
+              }
+            });
+
+            // Add zone label
+            const center = zone.coordinates.reduce(
+              (acc, coord) => [acc[0] + coord[0], acc[1] + coord[1]],
+              [0, 0]
+            ).map(sum => sum / zone.coordinates.length) as [number, number];
+
+            new mapboxgl.Marker({
+              element: createZoneLabel(zone),
+              anchor: 'center'
+            })
+              .setLngLat(center)
+              .addTo(map.current!);
+          }
+        });
+      });
+
       // Handle map click
       map.current.on('click', async (e) => {
+        const features = map.current?.queryRenderedFeatures(e.point, {
+          layers: zones.map(z => `zone-fill-${z.id}`)
+        });
+
+        if (features && features.length > 0) {
+          const zoneId = features[0].properties?.zoneId;
+          const zone = zones.find(z => z.id === zoneId);
+          if (zone) {
+            setSelectedZone(zone);
+            updateZoneHighlight(zone.id);
+          }
+        }
+
         const location = {
           address: `${e.lngLat.lat.toFixed(6)}, ${e.lngLat.lng.toFixed(6)}`,
           latitude: e.lngLat.lat,
           longitude: e.lngLat.lng
         };
 
-        // Try to get readable address
         try {
           const readableAddress = await reverseGeocode(e.lngLat.lng, e.lngLat.lat);
           location.address = readableAddress;
@@ -152,7 +249,6 @@ const AddressSelection = ({ service, onAddressSelect }: AddressSelectionProps) =
             .setLngLat(e.lngLat)
             .addTo(map.current!);
 
-          // Handle marker drag
           marker.current.on('dragend', async () => {
             if (!marker.current) return;
             
@@ -175,24 +271,54 @@ const AddressSelection = ({ service, onAddressSelect }: AddressSelectionProps) =
     } catch (error) {
       console.error('Error initializing map:', error);
     }
-  }, [mapboxToken, mapLoading]);
+  }, [mapboxToken, mapLoading, zones, selectedZone]);
+
+  const createZoneLabel = (zone: Zone) => {
+    const el = document.createElement('div');
+    el.className = 'zone-label';
+    el.style.cssText = `
+      background: white;
+      border: 2px solid ${zone.color || '#3B82F6'};
+      border-radius: 8px;
+      padding: 4px 8px;
+      font-size: 12px;
+      font-weight: bold;
+      color: ${zone.color || '#3B82F6'};
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      cursor: pointer;
+    `;
+    el.innerHTML = zone.name;
+    return el;
+  };
+
+  const updateZoneHighlight = (selectedZoneId: string) => {
+    zones.forEach((zone) => {
+      if (map.current?.getLayer(`zone-fill-${zone.id}`)) {
+        map.current.setPaintProperty(`zone-fill-${zone.id}`, 'fill-opacity', 
+          zone.id === selectedZoneId ? 0.6 : 0.3);
+        map.current.setPaintProperty(`zone-border-${zone.id}`, 'line-width', 
+          zone.id === selectedZoneId ? 3 : 2);
+      }
+    });
+  };
 
   const reverseGeocode = async (lng: number, lat: number): Promise<string> => {
     if (!mapboxToken) return 'Ubicación seleccionada';
     
     try {
-      const response = await fetch(
-        `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${googleApiKey}`
-      );
-      
-      if (response.ok && googleApiKey) {
-        const data = await response.json();
-        if (data.results?.[0]) {
-          return data.results[0].formatted_address;
+      if (googleApiKey) {
+        const response = await fetch(
+          `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${googleApiKey}`
+        );
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.results?.[0]) {
+            return data.results[0].formatted_address;
+          }
         }
       }
 
-      // Fallback to Mapbox
       const mapboxResponse = await fetch(
         `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${mapboxToken}&language=es`
       );
@@ -210,7 +336,6 @@ const AddressSelection = ({ service, onAddressSelect }: AddressSelectionProps) =
     try {
       let searchResults = [];
 
-      // Try Google Places first if API key is available
       if (googleApiKey) {
         const response = await fetch(
           `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&key=${googleApiKey}&language=es`
@@ -224,7 +349,6 @@ const AddressSelection = ({ service, onAddressSelect }: AddressSelectionProps) =
         }
       }
 
-      // Fallback to Mapbox if no Google results
       if (searchResults.length === 0 && mapboxToken) {
         const response = await fetch(
           `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxToken}&language=es&limit=5`
@@ -261,7 +385,6 @@ const AddressSelection = ({ service, onAddressSelect }: AddressSelectionProps) =
     try {
       let location = null;
 
-      // Try Google first
       if (googleApiKey) {
         const response = await fetch(
           `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(postalCode)}&key=${googleApiKey}`
@@ -280,7 +403,6 @@ const AddressSelection = ({ service, onAddressSelect }: AddressSelectionProps) =
         }
       }
 
-      // Fallback to Mapbox
       if (!location && mapboxToken) {
         const response = await fetch(
           `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(postalCode)}.json?access_token=${mapboxToken}&language=es&limit=1`
@@ -301,26 +423,7 @@ const AddressSelection = ({ service, onAddressSelect }: AddressSelectionProps) =
         setSelectedLocation(location);
         setAddress(location.address);
         setSuggestions([]);
-        
-        // Update map
-        if (map.current) {
-          map.current.flyTo({
-            center: [location.longitude, location.latitude],
-            zoom: 14
-          });
-          
-          if (marker.current) {
-            marker.current.setLngLat([location.longitude, location.latitude]);
-          } else {
-            marker.current = new mapboxgl.Marker({
-              color: '#DC2626',
-              draggable: true
-            })
-              .setLngLat([location.longitude, location.latitude])
-              .addTo(map.current!);
-          }
-        }
-        
+        updateMapLocation(location);
         toast.success('Ubicación encontrada');
       } else {
         toast.error('No se pudo encontrar el código postal');
@@ -337,7 +440,6 @@ const AddressSelection = ({ service, onAddressSelect }: AddressSelectionProps) =
     try {
       let location = null;
 
-      // Handle Google Places result
       if (suggestion.place_id && googleApiKey) {
         const response = await fetch(
           `https://maps.googleapis.com/maps/api/place/details/json?place_id=${suggestion.place_id}&key=${googleApiKey}`
@@ -355,7 +457,6 @@ const AddressSelection = ({ service, onAddressSelect }: AddressSelectionProps) =
         }
       }
 
-      // Handle Mapbox result or fallback
       if (!location && suggestion.geometry?.location) {
         location = {
           address: suggestion.description,
@@ -368,25 +469,7 @@ const AddressSelection = ({ service, onAddressSelect }: AddressSelectionProps) =
         setSelectedLocation(location);
         setAddress(location.address);
         setSuggestions([]);
-        
-        // Update map
-        if (map.current) {
-          map.current.flyTo({
-            center: [location.longitude, location.latitude],
-            zoom: 14
-          });
-          
-          if (marker.current) {
-            marker.current.setLngLat([location.longitude, location.latitude]);
-          } else {
-            marker.current = new mapboxgl.Marker({
-              color: '#DC2626',
-              draggable: true
-            })
-              .setLngLat([location.longitude, location.latitude])
-              .addTo(map.current!);
-          }
-        }
+        updateMapLocation(location);
       }
     } catch (error) {
       console.error('Error selecting address:', error);
@@ -409,26 +492,7 @@ const AddressSelection = ({ service, onAddressSelect }: AddressSelectionProps) =
           
           setSelectedLocation(location);
           setAddress(location.address);
-          
-          // Update map
-          if (map.current) {
-            map.current.flyTo({
-              center: [longitude, latitude],
-              zoom: 14
-            });
-            
-            if (marker.current) {
-              marker.current.setLngLat([longitude, latitude]);
-            } else {
-              marker.current = new mapboxgl.Marker({
-                color: '#DC2626',
-                draggable: true
-              })
-                .setLngLat([longitude, latitude])
-                .addTo(map.current!);
-            }
-          }
-          
+          updateMapLocation(location);
           setLoading(false);
         },
         (error) => {
@@ -440,28 +504,66 @@ const AddressSelection = ({ service, onAddressSelect }: AddressSelectionProps) =
     }
   };
 
-  const checkZone = async (lat: number, lng: number) => {
-    try {
-      const { data: zones } = await supabase
-        .from('zones')
-        .select('*')
-        .eq('is_active', true);
-
-      if (zones && zones.length > 0) {
-        const selectedZone = zones[0];
-        setZone(selectedZone);
-        
-        const price = selectedZone.pricing_type === 'fixed' 
-          ? service.base_price + (selectedZone.fixed_price || 0)
-          : service.base_price * (selectedZone.multiplier || 1);
-          
-        setFinalPrice(price);
+  const updateMapLocation = (location: { latitude: number; longitude: number }) => {
+    if (map.current) {
+      map.current.flyTo({
+        center: [location.longitude, location.latitude],
+        zoom: 14
+      });
+      
+      if (marker.current) {
+        marker.current.setLngLat([location.longitude, location.latitude]);
       } else {
-        setZone(null);
-        setFinalPrice(service.base_price);
+        marker.current = new mapboxgl.Marker({
+          color: '#DC2626',
+          draggable: true
+        })
+          .setLngLat([location.longitude, location.latitude])
+          .addTo(map.current!);
       }
-    } catch (error) {
-      console.error('Error checking zones:', error);
+    }
+  };
+
+  const isPointInPolygon = (point: [number, number], polygon: [number, number][]): boolean => {
+    const [x, y] = point;
+    let inside = false;
+    
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+      const [xi, yi] = polygon[i];
+      const [xj, yj] = polygon[j];
+      
+      if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
+        inside = !inside;
+      }
+    }
+    
+    return inside;
+  };
+
+  const checkZone = (lat: number, lng: number) => {
+    const point: [number, number] = [lng, lat];
+    let foundZone = null;
+
+    for (const zone of zones) {
+      if (zone.coordinates && zone.coordinates.length > 0) {
+        if (isPointInPolygon(point, zone.coordinates)) {
+          foundZone = zone;
+          break;
+        }
+      }
+    }
+
+    setSelectedZone(foundZone);
+    
+    if (foundZone) {
+      const price = foundZone.pricing_type === 'fixed' 
+        ? service.base_price + (foundZone.fixed_price || 0)
+        : service.base_price * (foundZone.multiplier || 1);
+      setFinalPrice(price);
+      updateZoneHighlight(foundZone.id);
+    } else {
+      setFinalPrice(service.base_price);
+      updateZoneHighlight('');
     }
   };
 
@@ -471,7 +573,6 @@ const AddressSelection = ({ service, onAddressSelect }: AddressSelectionProps) =
       return;
     }
 
-    // Use selected location if available, otherwise use manual address
     const locationData = selectedLocation || {
       address: address,
       latitude: 0,
@@ -482,7 +583,7 @@ const AddressSelection = ({ service, onAddressSelect }: AddressSelectionProps) =
       address: locationData.address,
       latitude: locationData.latitude,
       longitude: locationData.longitude,
-      zone: zone || undefined,
+      zone: selectedZone || undefined,
       finalPrice
     });
   };
@@ -567,13 +668,34 @@ const AddressSelection = ({ service, onAddressSelect }: AddressSelectionProps) =
       {!mapLoading && mapboxToken && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Mapa</CardTitle>
+            <CardTitle className="text-lg">Mapa de Zonas de Servicio</CardTitle>
             <p className="text-sm text-gray-600">
-              Haz clic en el mapa para seleccionar tu ubicación exacta
+              Haz clic en el mapa para seleccionar tu ubicación. Las zonas coloreadas muestran nuestras áreas de servicio con precios diferenciados.
             </p>
           </CardHeader>
           <CardContent>
             <div ref={mapContainer} className="w-full h-64 rounded-lg border" />
+            {zones.length > 0 && (
+              <div className="mt-4 space-y-2">
+                <h4 className="text-sm font-medium">Leyenda de Zonas:</h4>
+                <div className="grid grid-cols-2 gap-2">
+                  {zones.map((zone) => (
+                    <div key={zone.id} className="flex items-center gap-2 text-xs">
+                      <div 
+                        className="w-4 h-4 border border-gray-300 rounded"
+                        style={{ backgroundColor: zone.color || '#3B82F6' }}
+                      ></div>
+                      <span>{zone.name}</span>
+                      <span className="text-gray-500">
+                        ({zone.pricing_type === 'fixed' 
+                          ? `+$${zone.fixed_price}` 
+                          : `${zone.multiplier}x`})
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
@@ -598,13 +720,13 @@ const AddressSelection = ({ service, onAddressSelect }: AddressSelectionProps) =
                     <span>Precio base:</span>
                     <span>${service.base_price}</span>
                   </div>
-                  {zone && (
+                  {selectedZone && (
                     <div className="flex justify-between">
-                      <span>Zona {zone.name}:</span>
+                      <span>Zona {selectedZone.name}:</span>
                       <span>
-                        {zone.pricing_type === 'fixed' 
-                          ? `+$${zone.fixed_price}`
-                          : `x${zone.multiplier}`
+                        {selectedZone.pricing_type === 'fixed' 
+                          ? `+$${selectedZone.fixed_price}`
+                          : `x${selectedZone.multiplier}`
                         }
                       </span>
                     </div>
@@ -615,11 +737,11 @@ const AddressSelection = ({ service, onAddressSelect }: AddressSelectionProps) =
                   </div>
                 </div>
                 
-                {!zone && (
+                {!selectedZone && (
                   <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
                     <p className="text-yellow-800 text-sm">
-                      ⚠️ Esta dirección no está dentro de nuestras áreas de servicio regulares. 
-                      Puedes continuar para agendar una cita de evaluación.
+                      ⚠️ Esta dirección no está dentro de nuestras zonas de servicio regulares. 
+                      Se aplicará el precio base. Puedes continuar para agendar una cita.
                     </p>
                   </div>
                 )}
