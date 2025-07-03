@@ -57,12 +57,12 @@ const ZoneMap: React.FC<ZoneMapProps> = ({
         setMapboxToken(data.api_key);
       } else {
         // Usar el token proporcionado por el usuario como fallback
-        setMapboxToken('sk.eyJ1IjoiYWxleGlzbWVuZG96YXZlIiwiYSI6ImNtY25xMWdwNjB4ajgycXBwNnhqNXZlaWsifQ.fwEzsi4qbtziXbFJjgrI8A');
+        setMapboxToken('pk.eyJ1IjoiYWxleGlzbWVuZG96YXZlIiwiYSI6ImNtY21vMmpydTBuZ2QybG9uMmRud3VqZW8ifQ.QuPR_Yee1i2pPqm2MMajLA');
       }
     } catch (error) {
       console.error('Error fetching Mapbox token:', error);
       // Usar el token proporcionado por el usuario como fallback
-      setMapboxToken('sk.eyJ1IjoiYWxleGlzbWVuZG96YXZlIiwiYSI6ImNtY25xMWdwNjB4ajgycXBwNnhqNXZlaWsifQ.fwEzsi4qbtziXbFJjgrI8A');
+      setMapboxToken('pk.eyJ1IjoiYWxleGlzbWVuZG96YXZlIiwiYSI6ImNtY21vMmpydTBuZ2QybG9uMmRud3VqZW8ifQ.QuPR_Yee1i2pPqm2MMajLA');
     } finally {
       setLoading(false);
     }
