@@ -9,6 +9,8 @@ import AdminDashboard from "@/components/admin/AdminDashboard";
 import ServicesManagement from "@/components/admin/ServicesManagement";
 import BookingsManagement from "@/components/admin/BookingsManagement";
 import CompanyManagement from "@/components/admin/CompanyManagement";
+import PaymentMethodsManagement from "@/components/admin/PaymentMethodsManagement";
+import CustomizationManagement from "@/components/admin/CustomizationManagement";
 import EnhancedZoneMapWrapper from "@/components/admin/wrappers/EnhancedZoneMapWrapper";
 import UserManagement from "@/components/admin/UserManagement";
 
@@ -44,9 +46,9 @@ const Admin = () => {
               <Route path="services" element={<ServicesManagement />} />
               <Route path="bookings" element={<BookingsManagement />} />
               <Route path="company" element={<CompanyManagement />} />
+              <Route path="customization" element={<CustomizationManagement />} />
+              <Route path="payments" element={<PaymentMethodsManagement />} />
               <Route path="zones" element={<EnhancedZoneMapWrapper />} />
-              <Route path="apis" element={<div>APIs en desarrollo</div>} />
-              <Route path="payments" element={<div>Métodos de pago en desarrollo</div>} />
               <Route path="users" element={<UserManagement />} />
               <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
             </Routes>
