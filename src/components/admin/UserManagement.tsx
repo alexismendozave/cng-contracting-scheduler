@@ -6,17 +6,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Plus, Edit, Trash2, User, Users } from "lucide-react";
+import { Edit, User, Users } from "lucide-react";
+
+type UserRole = 'root_admin' | 'company_admin' | 'manager' | 'client' | 'assistant';
 
 interface Profile {
   id: string;
   email: string;
   full_name: string | null;
-  role: string;
+  role: UserRole;
   is_active: boolean;
   created_at: string;
 }
@@ -71,7 +73,7 @@ const UserManagement = () => {
     }
   };
 
-  const getRoleBadge = (role: string) => {
+  const getRoleBadge = (role: UserRole) => {
     const roleColors = {
       root_admin: 'bg-red-100 text-red-800',
       company_admin: 'bg-purple-100 text-purple-800',
@@ -89,8 +91,8 @@ const UserManagement = () => {
     };
 
     return (
-      <Badge className={roleColors[role as keyof typeof roleColors] || 'bg-gray-100 text-gray-800'}>
-        {roleLabels[role as keyof typeof roleLabels] || role}
+      <Badge className={roleColors[role] || 'bg-gray-100 text-gray-800'}>
+        {roleLabels[role] || role}
       </Badge>
     );
   };
@@ -222,7 +224,7 @@ const EditProfileForm = ({ profile, onSave, onCancel }: EditProfileFormProps) =>
 
       <div>
         <Label htmlFor="role">Rol</Label>
-        <Select value={formData.role} onValueChange={(value) => setFormData(prev => ({ ...prev, role: value }))}>
+        <Select value={formData.role} onValueChange={(value: UserRole) => setFormData(prev => ({ ...prev, role: value }))}>
           <SelectTrigger>
             <SelectValue />
           </SelectTrigger>

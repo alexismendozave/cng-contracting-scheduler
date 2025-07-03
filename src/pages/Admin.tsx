@@ -13,6 +13,7 @@ import ApiConfiguration from "@/components/admin/ApiConfiguration";
 import PaymentMethods from "@/components/admin/PaymentMethods";
 import Analytics from "@/components/admin/Analytics";
 import GeneralSettings from "@/components/admin/GeneralSettings";
+import UserManagement from "@/components/admin/UserManagement";
 import { Zone, Service, ServiceZonePrice, ApiConfig, PaymentMethod } from "@/components/admin/types";
 
 const Admin = () => {
