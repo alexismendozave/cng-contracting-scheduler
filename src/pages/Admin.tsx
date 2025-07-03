@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,13 +29,17 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import AdminZoneMap from "@/components/AdminZoneMap";
 
+// Update Zone interface to match database schema
 interface Zone {
   id: string;
   name: string;
   multiplier: number;
-  description: string;
-  color: string;
-  coordinates: [number, number][];
+  description: string | null;
+  color: string | null;
+  coordinates: any; // Using any for now since coordinates can be various JSON formats
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 interface Service {
@@ -177,7 +182,7 @@ const Admin = () => {
     setZones(updatedZones);
   };
 
-  // Mock data
+  // Mock data for dashboard stats
   const stats = {
     totalBookings: 45,
     totalRevenue: 8750,
@@ -548,8 +553,6 @@ const Admin = () => {
                           <span className="text-sm font-medium text-gray-500">#{index + 1}</span>
                           <span className="font-medium">{service.name}</span>
                         </div>
-                        {/* Assuming you have a bookings count in your service object */}
-                        {/* <span className="text-sm text-gray-600">{service.bookings} reservas</span> */}
                       </div>
                     ))}
                   </div>
@@ -568,7 +571,7 @@ const Admin = () => {
                       <div className="flex items-center gap-3">
                         <div 
                           className="w-3 h-3 rounded-full"
-                          style={{ backgroundColor: zone.color }}
+                          style={{ backgroundColor: zone.color || '#3B82F6' }}
                         ></div>
                         <span className="font-medium">{zone.name}</span>
                       </div>
@@ -578,10 +581,9 @@ const Admin = () => {
                             className="h-2 rounded-full"
                             style={{ 
                               width: `${Math.min((zones.filter(z => z.id === zone.id).length / zones.length) * 100, 100)}%`,
-                              backgroundColor: zone.color 
+                              backgroundColor: zone.color || '#3B82F6'
                             }}
                           ></div>
-                        {/* Assuming you have a booking count or some metric to display */}
                         </div>
                         <span className="text-sm text-gray-600">{zone.multiplier}x</span>
                       </div>

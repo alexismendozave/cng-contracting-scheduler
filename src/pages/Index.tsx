@@ -1,7 +1,8 @@
+
 import React from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ServiceCard } from "@/components/ServiceCard";
+import ServiceCard from "@/components/ServiceCard";
 import { 
   Wrench, 
   Lightbulb, 
@@ -26,8 +27,9 @@ const Index = () => {
       id: 1,
       name: "Reparación de Plomería",
       description: "Solucionamos todo tipo de problemas de plomería, desde fugas hasta instalaciones completas.",
-      icon: <Droplets className="h-6 w-6 text-blue-500" />,
-      price: "Desde $89",
+      basePrice: 89,
+      duration: "2-3 horas",
+      isPackage: false,
       rating: 4.5,
       reviews: 120
     },
@@ -35,8 +37,9 @@ const Index = () => {
       id: 2,
       name: "Instalación Eléctrica",
       description: "Instalamos y reparamos sistemas eléctricos para hogares y negocios.",
-      icon: <Lightbulb className="h-6 w-6 text-yellow-500" />,
-      price: "Desde $95",
+      basePrice: 95,
+      duration: "3-4 horas",
+      isPackage: false,
       rating: 4.8,
       reviews: 150
     },
@@ -44,8 +47,9 @@ const Index = () => {
       id: 3,
       name: "Pintura Interior",
       description: "Transformamos tus espacios con servicios de pintura de alta calidad.",
-      icon: <Paintbrush2 className="h-6 w-6 text-green-500" />,
-      price: "Desde $150",
+      basePrice: 150,
+      duration: "1-2 días",
+      isPackage: true,
       rating: 4.2,
       reviews: 90
     }
