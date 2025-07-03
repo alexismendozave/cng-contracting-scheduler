@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
@@ -31,19 +30,43 @@ const ZoneMap: React.FC<ZoneMapProps> = ({
   selectedZone,
   onZoneSelect,
   onLocationSelect,
-  center = [-99.1332, 19.4326], // Mexico City default
-  zoom = 10
+  center,
+  zoom
 }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const [mapboxToken, setMapboxToken] = useState('');
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
   const [selectedAddress, setSelectedAddress] = useState('');
+  const [searchAddress, setSearchAddress] = useState('');
   const [loading, setLoading] = useState(true);
+  const [centralAddress, setCentralAddress] = useState<{latitude: number, longitude: number, zoom: number} | null>(null);
 
   useEffect(() => {
     fetchMapboxToken();
+    fetchCentralAddress();
   }, []);
+
+  const fetchCentralAddress = async () => {
+    try {
+      const { data } = await supabase
+        .from('general_settings')
+        .select('setting_value')
+        .eq('setting_key', 'central_address')
+        .single();
+
+      if (data?.setting_value) {
+        const addressData = data.setting_value as any;
+        setCentralAddress({
+          latitude: addressData.latitude,
+          longitude: addressData.longitude,
+          zoom: addressData.zoom
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching central address:', error);
+    }
+  };
 
   const fetchMapboxToken = async () => {
     try {
@@ -57,15 +80,86 @@ const ZoneMap: React.FC<ZoneMapProps> = ({
         setMapboxToken(data.api_key);
       } else {
         console.log('No Mapbox token found in database, using fallback');
-        // Usar token público válido como fallback
         setMapboxToken('pk.eyJ1IjoiYWxleGlzbWVuZG96YXZlIiwiYSI6ImNtY21vMmpydTBuZ2QybG9uMmRud3VqZW8ifQ.QuPR_Yee1i2pPqm2MMajLA');
       }
     } catch (error) {
       console.error('Error fetching Mapbox token:', error);
-      // Usar token público válido como fallback
       setMapboxToken('pk.eyJ1IjoiYWxleGlzbWVuZG96YXZlIiwiYSI6ImNtY21vMmpydTBuZ2QybG9uMmRud3VqZW8ifQ.QuPR_Yee1i2pPqm2MMajLA');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Calculate center based on zones or central address
+  const getMapCenter = (): [number, number] => {
+    if (center) return center;
+    
+    // If we have zones with coordinates, center on them
+    if (zones.length > 0) {
+      const validZones = zones.filter(zone => zone.coordinates && zone.coordinates.length > 0);
+      if (validZones.length > 0) {
+        let totalLat = 0;
+        let totalLng = 0;
+        let pointCount = 0;
+        
+        validZones.forEach(zone => {
+          zone.coordinates.forEach(coord => {
+            totalLng += coord[0];
+            totalLat += coord[1];
+            pointCount++;
+          });
+        });
+        
+        if (pointCount > 0) {
+          return [totalLng / pointCount, totalLat / pointCount];
+        }
+      }
+    }
+    
+    // Use central address if available
+    if (centralAddress) {
+      return [centralAddress.longitude, centralAddress.latitude];
+    }
+    
+    // Default fallback
+    return [-99.1332, 19.4326];
+  };
+
+  const getMapZoom = (): number => {
+    if (zoom) return zoom;
+    if (centralAddress) return centralAddress.zoom;
+    return 10;
+  };
+
+  const searchLocation = async () => {
+    if (!mapboxToken || !searchAddress.trim()) return;
+
+    try {
+      const response = await fetch(
+        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(searchAddress)}.json?access_token=${mapboxToken}&language=es&limit=1`
+      );
+      const data = await response.json();
+      
+      if (data.features && data.features.length > 0) {
+        const [lng, lat] = data.features[0].center;
+        const address = data.features[0].place_name;
+        
+        setUserLocation([lng, lat]);
+        setSelectedAddress(address);
+        
+        if (map.current) {
+          map.current.flyTo({
+            center: [lng, lat],
+            zoom: 14
+          });
+        }
+        
+        if (onLocationSelect) {
+          onLocationSelect(lat, lng, address);
+        }
+      }
+    } catch (error) {
+      console.error('Error en búsqueda:', error);
     }
   };
 
@@ -76,11 +170,14 @@ const ZoneMap: React.FC<ZoneMapProps> = ({
       console.log('Initializing map with token:', mapboxToken.substring(0, 20) + '...');
       mapboxgl.accessToken = mapboxToken;
       
+      const mapCenter = getMapCenter();
+      const mapZoom = getMapZoom();
+      
       map.current = new mapboxgl.Map({
         container: mapContainer.current,
         style: 'mapbox://styles/mapbox/streets-v12',
-        center: center,
-        zoom: zoom,
+        center: mapCenter,
+        zoom: mapZoom,
       });
 
       // Add navigation controls
@@ -183,7 +280,7 @@ const ZoneMap: React.FC<ZoneMapProps> = ({
     } catch (error) {
       console.error('Error initializing map:', error);
     }
-  }, [mapboxToken, zones, selectedZone, center, zoom, loading]);
+  }, [mapboxToken, zones, selectedZone, loading, centralAddress]);
 
   const createZoneLabel = (zone: Zone) => {
     const el = document.createElement('div');
@@ -277,15 +374,27 @@ const ZoneMap: React.FC<ZoneMapProps> = ({
   return (
     <div className="space-y-4">
       <div className="flex gap-2">
-        <Button onClick={getCurrentLocation} variant="outline" size="sm">
-          📍 Mi ubicación actual
+        <div className="flex-1">
+          <Input
+            value={searchAddress}
+            onChange={(e) => setSearchAddress(e.target.value)}
+            placeholder="Buscar dirección o ciudad..."
+            onKeyPress={(e) => e.key === 'Enter' && searchLocation()}
+          />
+        </div>
+        <Button onClick={searchLocation} variant="outline" size="sm">
+          Buscar
         </Button>
-        {selectedAddress && (
-          <div className="flex-1 text-sm text-gray-600 flex items-center">
-            📍 {selectedAddress}
-          </div>
-        )}
+        <Button onClick={getCurrentLocation} variant="outline" size="sm">
+          📍 Mi ubicación
+        </Button>
       </div>
+
+      {selectedAddress && (
+        <div className="text-sm text-gray-600 flex items-center">
+          📍 {selectedAddress}
+        </div>
+      )}
       
       <div ref={mapContainer} className="w-full h-96 rounded-lg border" />
       

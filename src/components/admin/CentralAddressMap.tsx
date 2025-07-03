@@ -3,7 +3,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface CentralAddress {
   address: string;
@@ -13,23 +17,32 @@ interface CentralAddress {
 }
 
 interface CentralAddressMapProps {
-  centralAddress: CentralAddress;
-  onLocationSelect: (lat: number, lng: number, address: string) => void;
+  initialAddress: CentralAddress;
+  onAddressUpdate: (newAddress: CentralAddress) => Promise<void>;
+  loading: boolean;
 }
 
 const CentralAddressMap: React.FC<CentralAddressMapProps> = ({
-  centralAddress,
-  onLocationSelect
+  initialAddress,
+  onAddressUpdate,
+  loading
 }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const marker = useRef<mapboxgl.Marker | null>(null);
   const [mapboxToken, setMapboxToken] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [mapLoading, setMapLoading] = useState(true);
+  const [searchAddress, setSearchAddress] = useState(initialAddress.address);
+  const [currentAddress, setCurrentAddress] = useState<CentralAddress>(initialAddress);
 
   useEffect(() => {
     fetchMapboxToken();
   }, []);
+
+  useEffect(() => {
+    setCurrentAddress(initialAddress);
+    setSearchAddress(initialAddress.address);
+  }, [initialAddress]);
 
   const fetchMapboxToken = async () => {
     try {
@@ -41,16 +54,20 @@ const CentralAddressMap: React.FC<CentralAddressMapProps> = ({
       
       if (data?.api_key) {
         setMapboxToken(data.api_key);
+      } else {
+        console.log('No Mapbox token found, using fallback');
+        setMapboxToken('pk.eyJ1IjoiYWxleGlzbWVuZG96YXZlIiwiYSI6ImNtY21vMmpydTBuZ2QybG9uMmRud3VqZW8ifQ.QuPR_Yee1i2pPqm2MMajLA');
       }
     } catch (error) {
       console.error('Error fetching Mapbox token:', error);
+      setMapboxToken('pk.eyJ1IjoiYWxleGlzbWVuZG96YXZlIiwiYSI6ImNtY21vMmpydTBuZ2QybG9uMmRud3VqZW8ifQ.QuPR_Yee1i2pPqm2MMajLA');
     } finally {
-      setLoading(false);
+      setMapLoading(false);
     }
   };
 
   useEffect(() => {
-    if (!mapContainer.current || !mapboxToken || loading) return;
+    if (!mapContainer.current || !mapboxToken || mapLoading) return;
 
     try {
       mapboxgl.accessToken = mapboxToken;
@@ -58,18 +75,18 @@ const CentralAddressMap: React.FC<CentralAddressMapProps> = ({
       map.current = new mapboxgl.Map({
         container: mapContainer.current,
         style: 'mapbox://styles/mapbox/streets-v12',
-        center: [centralAddress.longitude, centralAddress.latitude],
-        zoom: centralAddress.zoom,
+        center: [currentAddress.longitude, currentAddress.latitude],
+        zoom: currentAddress.zoom,
       });
 
       map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
-      // Add initial marker
+      // Add marker
       marker.current = new mapboxgl.Marker({
         color: '#DC2626',
         draggable: true
       })
-        .setLngLat([centralAddress.longitude, centralAddress.latitude])
+        .setLngLat([currentAddress.longitude, currentAddress.latitude])
         .addTo(map.current);
 
       // Handle marker drag
@@ -78,7 +95,14 @@ const CentralAddressMap: React.FC<CentralAddressMapProps> = ({
         
         const lngLat = marker.current.getLngLat();
         const address = await reverseGeocode(lngLat.lng, lngLat.lat);
-        onLocationSelect(lngLat.lat, lngLat.lng, address);
+        const newAddress = {
+          address,
+          latitude: lngLat.lat,
+          longitude: lngLat.lng,
+          zoom: map.current?.getZoom() || 10
+        };
+        setCurrentAddress(newAddress);
+        setSearchAddress(address);
       });
 
       // Handle map click
@@ -87,7 +111,14 @@ const CentralAddressMap: React.FC<CentralAddressMapProps> = ({
         
         marker.current.setLngLat(e.lngLat);
         const address = await reverseGeocode(e.lngLat.lng, e.lngLat.lat);
-        onLocationSelect(e.lngLat.lat, e.lngLat.lng, address);
+        const newAddress = {
+          address,
+          latitude: e.lngLat.lat,
+          longitude: e.lngLat.lng,
+          zoom: map.current?.getZoom() || 10
+        };
+        setCurrentAddress(newAddress);
+        setSearchAddress(address);
       });
 
       return () => {
@@ -96,20 +127,18 @@ const CentralAddressMap: React.FC<CentralAddressMapProps> = ({
     } catch (error) {
       console.error('Error initializing map:', error);
     }
-  }, [mapboxToken, loading]);
+  }, [mapboxToken, mapLoading]);
 
-  // Update marker position when centralAddress changes
+  // Update marker when currentAddress changes
   useEffect(() => {
-    if (marker.current) {
-      marker.current.setLngLat([centralAddress.longitude, centralAddress.latitude]);
-    }
-    if (map.current) {
+    if (marker.current && map.current) {
+      marker.current.setLngLat([currentAddress.longitude, currentAddress.latitude]);
       map.current.flyTo({
-        center: [centralAddress.longitude, centralAddress.latitude],
-        zoom: centralAddress.zoom
+        center: [currentAddress.longitude, currentAddress.latitude],
+        zoom: currentAddress.zoom
       });
     }
-  }, [centralAddress]);
+  }, [currentAddress]);
 
   const reverseGeocode = async (lng: number, lat: number): Promise<string> => {
     if (!mapboxToken) return 'Ubicación seleccionada';
@@ -126,7 +155,59 @@ const CentralAddressMap: React.FC<CentralAddressMapProps> = ({
     }
   };
 
-  if (loading) {
+  const searchLocation = async () => {
+    if (!mapboxToken || !searchAddress.trim()) return;
+
+    try {
+      const response = await fetch(
+        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(searchAddress)}.json?access_token=${mapboxToken}&language=es&limit=1`
+      );
+      const data = await response.json();
+      
+      if (data.features && data.features.length > 0) {
+        const [lng, lat] = data.features[0].center;
+        const address = data.features[0].place_name;
+        
+        const newAddress = {
+          address,
+          latitude: lat,
+          longitude: lng,
+          zoom: 12
+        };
+        
+        setCurrentAddress(newAddress);
+        setSearchAddress(address);
+        
+        if (map.current) {
+          map.current.flyTo({
+            center: [lng, lat],
+            zoom: 12
+          });
+        }
+        
+        if (marker.current) {
+          marker.current.setLngLat([lng, lat]);
+        }
+      } else {
+        toast.error('No se encontró la dirección');
+      }
+    } catch (error) {
+      console.error('Error en búsqueda:', error);
+      toast.error('Error al buscar la dirección');
+    }
+  };
+
+  const handleSave = async () => {
+    try {
+      await onAddressUpdate(currentAddress);
+      toast.success('Dirección central guardada exitosamente');
+    } catch (error) {
+      console.error('Error saving address:', error);
+      toast.error('Error al guardar la dirección');
+    }
+  };
+
+  if (mapLoading) {
     return (
       <Card>
         <CardContent className="pt-6">
@@ -157,14 +238,42 @@ const CentralAddressMap: React.FC<CentralAddressMapProps> = ({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Seleccionar Dirección Central</CardTitle>
+        <CardTitle>Configurar Dirección Central</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <Label htmlFor="search-address">Buscar dirección</Label>
+              <Input
+                id="search-address"
+                value={searchAddress}
+                onChange={(e) => setSearchAddress(e.target.value)}
+                placeholder="Escribe una dirección o ciudad..."
+                onKeyPress={(e) => e.key === 'Enter' && searchLocation()}
+              />
+            </div>
+            <div className="flex items-end">
+              <Button onClick={searchLocation} variant="outline">
+                Buscar
+              </Button>
+            </div>
+          </div>
+          
           <p className="text-sm text-gray-600">
-            Haz clic en el mapa o arrastra el marcador rojo para seleccionar la nueva ubicación central.
+            Haz clic en el mapa, arrastra el marcador rojo o busca una dirección para seleccionar la ubicación central.
           </p>
+          
           <div ref={mapContainer} className="w-full h-96 rounded-lg border" />
+          
+          <div className="flex justify-between items-center pt-4">
+            <div className="text-sm text-gray-600">
+              <strong>Dirección actual:</strong> {currentAddress.address}
+            </div>
+            <Button onClick={handleSave} disabled={loading}>
+              {loading ? 'Guardando...' : 'Guardar Dirección Central'}
+            </Button>
+          </div>
         </div>
       </CardContent>
     </Card>
