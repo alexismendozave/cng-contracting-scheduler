@@ -67,7 +67,7 @@ const CentralAddressMap: React.FC<CentralAddressMapProps> = ({
   };
 
   useEffect(() => {
-    if (!mapContainer.current || !mapboxToken || mapLoading) return;
+    if (!mapContainer.current || !mapboxToken || mapLoading || !currentAddress) return;
 
     try {
       mapboxgl.accessToken = mapboxToken;
@@ -75,8 +75,8 @@ const CentralAddressMap: React.FC<CentralAddressMapProps> = ({
       map.current = new mapboxgl.Map({
         container: mapContainer.current,
         style: 'mapbox://styles/mapbox/streets-v12',
-        center: [currentAddress.longitude, currentAddress.latitude],
-        zoom: currentAddress.zoom,
+        center: [currentAddress.longitude || -99.1332, currentAddress.latitude || 19.4326],
+        zoom: currentAddress.zoom || 10,
       });
 
       map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
@@ -86,7 +86,7 @@ const CentralAddressMap: React.FC<CentralAddressMapProps> = ({
         color: '#DC2626',
         draggable: true
       })
-        .setLngLat([currentAddress.longitude, currentAddress.latitude])
+        .setLngLat([currentAddress.longitude || -99.1332, currentAddress.latitude || 19.4326])
         .addTo(map.current);
 
       // Handle marker drag
@@ -127,11 +127,11 @@ const CentralAddressMap: React.FC<CentralAddressMapProps> = ({
     } catch (error) {
       console.error('Error initializing map:', error);
     }
-  }, [mapboxToken, mapLoading]);
+  }, [mapboxToken, mapLoading, currentAddress.latitude, currentAddress.longitude]);
 
   // Update marker when currentAddress changes
   useEffect(() => {
-    if (marker.current && map.current) {
+    if (marker.current && map.current && currentAddress.longitude && currentAddress.latitude) {
       marker.current.setLngLat([currentAddress.longitude, currentAddress.latitude]);
       map.current.flyTo({
         center: [currentAddress.longitude, currentAddress.latitude],
@@ -200,7 +200,6 @@ const CentralAddressMap: React.FC<CentralAddressMapProps> = ({
   const handleSave = async () => {
     try {
       await onAddressUpdate(currentAddress);
-      toast.success('Dirección central guardada exitosamente');
     } catch (error) {
       console.error('Error saving address:', error);
       toast.error('Error al guardar la dirección');

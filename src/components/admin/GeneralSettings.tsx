@@ -54,23 +54,32 @@ const GeneralSettings = () => {
   const handleAddressUpdate = async (newAddress: CentralAddress) => {
     setLoading(true);
     try {
-      // Use upsert with the correct conflict resolution
-      const { error } = await supabase
+      // Primero intentar actualizar
+      const { error: updateError } = await supabase
         .from('general_settings')
-        .upsert({
-          setting_key: 'central_address',
+        .update({
           setting_value: newAddress as any
-        }, {
-          onConflict: 'setting_key'
-        });
+        })
+        .eq('setting_key', 'central_address');
 
-      if (error) {
-        console.error('Error saving address:', error);
-        toast.error('Error al guardar la dirección: ' + error.message);
-      } else {
-        setCentralAddress(newAddress);
-        toast.success('Dirección central actualizada exitosamente');
+      if (updateError) {
+        // Si falla, intentar insertar
+        const { error: insertError } = await supabase
+          .from('general_settings')
+          .insert({
+            setting_key: 'central_address',
+            setting_value: newAddress as any
+          });
+
+        if (insertError) {
+          console.error('Error saving address:', insertError);
+          toast.error('Error al guardar la dirección: ' + insertError.message);
+          return;
+        }
       }
+
+      setCentralAddress(newAddress);
+      toast.success('Dirección central actualizada exitosamente');
     } catch (error) {
       console.error('Error updating central address:', error);
       toast.error('Error al actualizar la dirección');
