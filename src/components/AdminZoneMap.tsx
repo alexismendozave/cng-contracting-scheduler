@@ -9,26 +9,18 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Trash2, Edit, Save, X } from 'lucide-react';
-
-interface Zone {
-  id: number;
-  name: string;
-  multiplier: number;
-  description: string;
-  color: string;
-  coordinates: [number, number][];
-}
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { Zone } from './admin/types';
 
 interface AdminZoneMapProps {
   zones: Zone[];
   onZoneUpdate: (zones: Zone[]) => void;
-  mapboxToken: string;
 }
 
 const AdminZoneMap: React.FC<AdminZoneMapProps> = ({
   zones,
-  onZoneUpdate,
-  mapboxToken
+  onZoneUpdate
 }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
@@ -36,42 +28,75 @@ const AdminZoneMap: React.FC<AdminZoneMapProps> = ({
   const [currentPath, setCurrentPath] = useState<[number, number][]>([]);
   const [editingZone, setEditingZone] = useState<Partial<Zone> | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [mapboxToken, setMapboxToken] = useState('');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!mapContainer.current || !mapboxToken) return;
+    fetchMapboxToken();
+  }, []);
 
-    mapboxgl.accessToken = mapboxToken;
-    
-    map.current = new mapboxgl.Map({
-      container: mapContainer.current,
-      style: 'mapbox://styles/mapbox/streets-v12',
-      center: [-99.1332, 19.4326],
-      zoom: 10,
-    });
-
-    map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
-
-    map.current.on('load', () => {
-      renderZones();
+  const fetchMapboxToken = async () => {
+    try {
+      const { data } = await supabase
+        .from('api_configs')
+        .select('api_key')
+        .eq('name', 'mapbox')
+        .single();
       
-      // Click handler for drawing zones
-      map.current?.on('click', (e) => {
-        if (isDrawing) {
-          const newPoint: [number, number] = [e.lngLat.lng, e.lngLat.lat];
-          setCurrentPath(prev => [...prev, newPoint]);
-          
-          // Add marker for the point
-          new mapboxgl.Marker({ color: '#ff0000' })
-            .setLngLat(newPoint)
-            .addTo(map.current!);
-        }
-      });
-    });
+      if (data?.api_key) {
+        setMapboxToken(data.api_key);
+      } else {
+        // Usar el token proporcionado por el usuario como fallback
+        setMapboxToken('sk.eyJ1IjoiYWxleGlzbWVuZG96YXZlIiwiYSI6ImNtY25xMWdwNjB4ajgycXBwNnhqNXZlaWsifQ.fwEzsi4qbtziXbFJjgrI8A');
+      }
+    } catch (error) {
+      console.error('Error fetching Mapbox token:', error);
+      // Usar el token proporcionado por el usuario como fallback
+      setMapboxToken('sk.eyJ1IjoiYWxleGlzbWVuZG96YXZlIiwiYSI6ImNtY25xMWdwNjB4ajgycXBwNnhqNXZlaWsifQ.fwEzsi4qbtziXbFJjgrI8A');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    return () => {
-      map.current?.remove();
-    };
-  }, [mapboxToken, zones, isDrawing]);
+  useEffect(() => {
+    if (!mapContainer.current || !mapboxToken || loading) return;
+
+    try {
+      mapboxgl.accessToken = mapboxToken;
+      
+      map.current = new mapboxgl.Map({
+        container: mapContainer.current,
+        style: 'mapbox://styles/mapbox/streets-v12',
+        center: [-99.1332, 19.4326],
+        zoom: 10,
+      });
+
+      map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
+
+      map.current.on('load', () => {
+        renderZones();
+        
+        // Click handler for drawing zones
+        map.current?.on('click', (e) => {
+          if (isDrawing) {
+            const newPoint: [number, number] = [e.lngLat.lng, e.lngLat.lat];
+            setCurrentPath(prev => [...prev, newPoint]);
+            
+            // Add marker for the point
+            new mapboxgl.Marker({ color: '#ff0000' })
+              .setLngLat(newPoint)
+              .addTo(map.current!);
+          }
+        });
+      });
+
+      return () => {
+        map.current?.remove();
+      };
+    } catch (error) {
+      console.error('Error initializing map:', error);
+    }
+  }, [mapboxToken, zones, isDrawing, loading]);
 
   const renderZones = () => {
     if (!map.current) return;
@@ -87,7 +112,7 @@ const AdminZoneMap: React.FC<AdminZoneMapProps> = ({
 
     // Render zones
     zones.forEach(zone => {
-      if (zone.coordinates && zone.coordinates.length > 2) {
+      if (zone.coordinates && Array.isArray(zone.coordinates) && zone.coordinates.length > 2) {
         const polygonCoordinates = [...zone.coordinates, zone.coordinates[0]];
         
         map.current?.addSource(`zone-${zone.id}`, {
@@ -107,7 +132,7 @@ const AdminZoneMap: React.FC<AdminZoneMapProps> = ({
           type: 'fill',
           source: `zone-${zone.id}`,
           paint: {
-            'fill-color': zone.color,
+            'fill-color': zone.color || '#3B82F6',
             'fill-opacity': 0.4
           }
         });
@@ -117,7 +142,7 @@ const AdminZoneMap: React.FC<AdminZoneMapProps> = ({
           type: 'line',
           source: `zone-${zone.id}`,
           paint: {
-            'line-color': zone.color,
+            'line-color': zone.color || '#3B82F6',
             'line-width': 2
           }
         });
@@ -133,13 +158,14 @@ const AdminZoneMap: React.FC<AdminZoneMapProps> = ({
       multiplier: 1.0,
       description: '',
       color: '#3B82F6',
-      coordinates: []
+      coordinates: [],
+      pricing_type: 'percentage'
     });
   };
 
   const finishDrawing = () => {
     if (currentPath.length < 3) {
-      alert('Necesitas al menos 3 puntos para crear una zona');
+      toast.error('Necesitas al menos 3 puntos para crear una zona');
       return;
     }
 
@@ -160,41 +186,87 @@ const AdminZoneMap: React.FC<AdminZoneMapProps> = ({
     markers.forEach(marker => marker.remove());
   };
 
-  const saveZone = () => {
+  const saveZone = async () => {
     if (!editingZone || !editingZone.name || !editingZone.coordinates?.length) {
-      alert('Por favor completa todos los campos');
+      toast.error('Por favor completa todos los campos');
       return;
     }
 
-    const newZone: Zone = {
-      id: isEditing ? (editingZone as Zone).id : Date.now(),
-      name: editingZone.name,
-      multiplier: editingZone.multiplier || 1.0,
-      description: editingZone.description || '',
-      color: editingZone.color || '#3B82F6',
-      coordinates: editingZone.coordinates
-    };
+    try {
+      const zoneData = {
+        name: editingZone.name,
+        multiplier: editingZone.multiplier || 1.0,
+        description: editingZone.description || '',
+        color: editingZone.color || '#3B82F6',
+        coordinates: editingZone.coordinates,
+        pricing_type: editingZone.pricing_type || 'percentage',
+        fixed_price: editingZone.pricing_type === 'fixed' ? editingZone.fixed_price : null
+      };
 
-    let updatedZones;
-    if (isEditing) {
-      updatedZones = zones.map(z => z.id === newZone.id ? newZone : z);
-    } else {
-      updatedZones = [...zones, newZone];
+      if (isEditing && editingZone.id) {
+        const { error } = await supabase
+          .from('zones')
+          .update(zoneData)
+          .eq('id', editingZone.id);
+        
+        if (error) throw error;
+        toast.success('Zona actualizada exitosamente');
+      } else {
+        const { error } = await supabase
+          .from('zones')
+          .insert([zoneData]);
+        
+        if (error) throw error;
+        toast.success('Zona creada exitosamente');
+      }
+
+      // Refetch zones
+      const { data: zonesData } = await supabase
+        .from('zones')
+        .select('*')
+        .order('name');
+      
+      if (zonesData) {
+        onZoneUpdate(zonesData);
+      }
+
+      setEditingZone(null);
+      setIsEditing(false);
+      
+      // Clear markers
+      const markers = document.querySelectorAll('.mapboxgl-marker');
+      markers.forEach(marker => marker.remove());
+    } catch (error) {
+      console.error('Error saving zone:', error);
+      toast.error('Error al guardar la zona');
     }
-
-    onZoneUpdate(updatedZones);
-    setEditingZone(null);
-    setIsEditing(false);
-    
-    // Clear markers
-    const markers = document.querySelectorAll('.mapboxgl-marker');
-    markers.forEach(marker => marker.remove());
   };
 
-  const deleteZone = (zoneId: number) => {
-    if (confirm('¿Estás seguro de eliminar esta zona?')) {
-      const updatedZones = zones.filter(z => z.id !== zoneId);
-      onZoneUpdate(updatedZones);
+  const deleteZone = async (zoneId: string) => {
+    if (!confirm('¿Estás seguro de eliminar esta zona?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('zones')
+        .delete()
+        .eq('id', zoneId);
+      
+      if (error) throw error;
+      
+      toast.success('Zona eliminada exitosamente');
+      
+      // Refetch zones
+      const { data: zonesData } = await supabase
+        .from('zones')
+        .select('*')
+        .order('name');
+      
+      if (zonesData) {
+        onZoneUpdate(zonesData);
+      }
+    } catch (error) {
+      console.error('Error deleting zone:', error);
+      toast.error('Error al eliminar la zona');
     }
   };
 
@@ -202,6 +274,34 @@ const AdminZoneMap: React.FC<AdminZoneMapProps> = ({
     setEditingZone(zone);
     setIsEditing(true);
   };
+
+  if (loading) {
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <span className="ml-2">Cargando mapa...</span>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!mapboxToken) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Error de Configuración</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-red-600 mb-4">
+            No se pudo cargar el token de Mapbox. Por favor verifica la configuración en la sección de APIs.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -257,15 +357,53 @@ const AdminZoneMap: React.FC<AdminZoneMapProps> = ({
                 />
               </div>
               <div>
-                <Label htmlFor="zone-multiplier">Multiplicador de precio</Label>
+                <Label htmlFor="zone-pricing-type">Tipo de precio</Label>
+                <select
+                  id="zone-pricing-type"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  value={editingZone.pricing_type || 'percentage'}
+                  onChange={(e) => setEditingZone(prev => ({...prev, pricing_type: e.target.value as 'percentage' | 'fixed'}))}
+                >
+                  <option value="percentage">Porcentaje</option>
+                  <option value="fixed">Costo fijo</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-4">
+              {editingZone.pricing_type === 'percentage' ? (
+                <div>
+                  <Label htmlFor="zone-multiplier">Multiplicador de precio</Label>
+                  <Input
+                    id="zone-multiplier"
+                    type="number"
+                    step="0.05"
+                    min="0.5"
+                    max="3.0"
+                    value={editingZone.multiplier || 1.0}
+                    onChange={(e) => setEditingZone(prev => ({...prev, multiplier: parseFloat(e.target.value)}))}
+                  />
+                </div>
+              ) : (
+                <div>
+                  <Label htmlFor="zone-fixed-price">Precio fijo adicional</Label>
+                  <Input
+                    id="zone-fixed-price"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={editingZone.fixed_price || 0}
+                    onChange={(e) => setEditingZone(prev => ({...prev, fixed_price: parseFloat(e.target.value)}))}
+                  />
+                </div>
+              )}
+              <div>
+                <Label htmlFor="zone-color">Color</Label>
                 <Input
-                  id="zone-multiplier"
-                  type="number"
-                  step="0.05"
-                  min="0.5"
-                  max="3.0"
-                  value={editingZone.multiplier || 1.0}
-                  onChange={(e) => setEditingZone(prev => ({...prev, multiplier: parseFloat(e.target.value)}))}
+                  id="zone-color"
+                  type="color"
+                  value={editingZone.color || '#3B82F6'}
+                  onChange={(e) => setEditingZone(prev => ({...prev, color: e.target.value}))}
                 />
               </div>
             </div>
@@ -277,16 +415,6 @@ const AdminZoneMap: React.FC<AdminZoneMapProps> = ({
                 value={editingZone.description || ''}
                 onChange={(e) => setEditingZone(prev => ({...prev, description: e.target.value}))}
                 placeholder="Describe las características de esta zona..."
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="zone-color">Color</Label>
-              <Input
-                id="zone-color"
-                type="color"
-                value={editingZone.color || '#3B82F6'}
-                onChange={(e) => setEditingZone(prev => ({...prev, color: e.target.value}))}
               />
             </div>
 
@@ -311,7 +439,7 @@ const AdminZoneMap: React.FC<AdminZoneMapProps> = ({
       {/* Zones List */}
       <Card>
         <CardHeader>
-          <CardTitle>Zonas Existentes</CardTitle>
+          <CardTitle>Zonas Existentes ({zones.length})</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
@@ -320,14 +448,17 @@ const AdminZoneMap: React.FC<AdminZoneMapProps> = ({
                 <div className="flex items-center gap-3">
                   <div 
                     className="w-4 h-4 rounded-full"
-                    style={{ backgroundColor: zone.color }}
+                    style={{ backgroundColor: zone.color || '#3B82F6' }}
                   />
                   <div>
                     <h4 className="font-semibold">{zone.name}</h4>
                     <p className="text-sm text-gray-600">{zone.description}</p>
                   </div>
                   <Badge variant="secondary">
-                    {zone.multiplier}x
+                    {zone.pricing_type === 'fixed' 
+                      ? `+$${zone.fixed_price}` 
+                      : `${zone.multiplier}x`
+                    }
                   </Badge>
                 </div>
                 <div className="flex gap-2">

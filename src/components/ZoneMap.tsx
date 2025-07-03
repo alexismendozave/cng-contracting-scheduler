@@ -56,12 +56,13 @@ const ZoneMap: React.FC<ZoneMapProps> = ({
       if (data?.api_key) {
         setMapboxToken(data.api_key);
       } else {
-        // Usar el token proporcionado por el usuario como fallback
+        console.log('No Mapbox token found in database, using fallback');
+        // Usar token público válido como fallback
         setMapboxToken('pk.eyJ1IjoiYWxleGlzbWVuZG96YXZlIiwiYSI6ImNtY21vMmpydTBuZ2QybG9uMmRud3VqZW8ifQ.QuPR_Yee1i2pPqm2MMajLA');
       }
     } catch (error) {
       console.error('Error fetching Mapbox token:', error);
-      // Usar el token proporcionado por el usuario como fallback
+      // Usar token público válido como fallback
       setMapboxToken('pk.eyJ1IjoiYWxleGlzbWVuZG96YXZlIiwiYSI6ImNtY21vMmpydTBuZ2QybG9uMmRud3VqZW8ifQ.QuPR_Yee1i2pPqm2MMajLA');
     } finally {
       setLoading(false);
@@ -72,6 +73,7 @@ const ZoneMap: React.FC<ZoneMapProps> = ({
     if (!mapContainer.current || !mapboxToken || loading) return;
 
     try {
+      console.log('Initializing map with token:', mapboxToken.substring(0, 20) + '...');
       mapboxgl.accessToken = mapboxToken;
       
       map.current = new mapboxgl.Map({
@@ -86,6 +88,7 @@ const ZoneMap: React.FC<ZoneMapProps> = ({
 
       // Add zones to map
       map.current.on('load', () => {
+        console.log('Map loaded successfully');
         zones.forEach((zone, index) => {
           if (zone.coordinates && zone.coordinates.length > 0) {
             // Create polygon for zone
@@ -168,6 +171,10 @@ const ZoneMap: React.FC<ZoneMapProps> = ({
             }
           }
         });
+      });
+
+      map.current.on('error', (e) => {
+        console.error('Map error:', e);
       });
 
       return () => {
