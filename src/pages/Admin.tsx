@@ -18,6 +18,16 @@ import {
   Eye
 } from "lucide-react";
 import { Link } from "react-router-dom";
+import AdminZoneMap from "@/components/AdminZoneMap";
+
+interface Zone {
+  id: number;
+  name: string;
+  multiplier: number;
+  description: string;
+  color: string;
+  coordinates: [number, number][];
+}
 
 const Admin = () => {
   // Mock data
@@ -88,23 +98,41 @@ const Admin = () => {
     }
   ];
 
-  const zones = [
-    { id: 1, name: "Zona Centro", multiplier: 1.0, color: "#3B82F6", services: 45 },
-    { id: 2, name: "Zona Norte", multiplier: 1.15, color: "#10B981", services: 32 },
-    { id: 3, name: "Zona Sur", multiplier: 1.1, color: "#F59E0B", services: 28 },
-    { id: 4, name: "Zona Este", multiplier: 1.2, color: "#EF4444", services: 22 },
-    { id: 5, name: "Zona Oeste", multiplier: 1.25, color: "#8B5CF6", services: 18 }
-  ];
+  // State for zones management
+  const [zones, setZones] = useState<Zone[]>([
+    { 
+      id: 1, 
+      name: "Zona Centro", 
+      multiplier: 1.0, 
+      color: "#3B82F6", 
+      description: "Área central de la ciudad",
+      coordinates: [[-99.1332, 19.4326], [-99.1300, 19.4350], [-99.1280, 19.4310], [-99.1320, 19.4300]]
+    },
+    { 
+      id: 2, 
+      name: "Zona Norte", 
+      multiplier: 1.15, 
+      color: "#10B981", 
+      description: "Zona norte residencial",
+      coordinates: [[-99.1400, 19.4400], [-99.1350, 19.4450], [-99.1300, 19.4420], [-99.1370, 19.4380]]
+    }
+  ]);
 
-  const getStatusBadge = (status) => {
+  const [mapboxToken, setMapboxToken] = useState('');
+
+  const handleZoneUpdate = (updatedZones: Zone[]) => {
+    setZones(updatedZones);
+  };
+
+  const getStatusBadge = (status: string) => {
     const variants = {
-      pending: { variant: "secondary", text: "Pendiente" },
-      confirmed: { variant: "default", text: "Confirmado" },
-      completed: { variant: "outline", text: "Completado" },
-      cancelled: { variant: "destructive", text: "Cancelado" }
+      pending: { variant: "secondary" as const, text: "Pendiente" },
+      confirmed: { variant: "default" as const, text: "Confirmado" },
+      completed: { variant: "outline" as const, text: "Completado" },
+      cancelled: { variant: "destructive" as const, text: "Cancelado" }
     };
     
-    const config = variants[status] || variants.pending;
+    const config = variants[status as keyof typeof variants] || variants.pending;
     
     return (
       <Badge variant={config.variant}>
@@ -299,60 +327,13 @@ const Admin = () => {
             </Card>
           </TabsContent>
 
-          {/* Zones Tab */}
+          {/* Zones Tab - Now with Interactive Map */}
           <TabsContent value="zones" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle>Gestión de Zonas</CardTitle>
-                    <CardDescription>Administra las zonas de servicio y precios</CardDescription>
-                  </div>
-                  <Button className="bg-blue-600 hover:bg-blue-700">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Nueva Zona
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="grid md:grid-cols-2 gap-6">
-                  <div className="space-y-4">
-                    {zones.map((zone) => (
-                      <div key={zone.id} className="flex items-center justify-between p-4 border rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <div 
-                            className="w-4 h-4 rounded-full"
-                            style={{ backgroundColor: zone.color }}
-                          ></div>
-                          <div>
-                            <h4 className="font-semibold">{zone.name}</h4>
-                            <div className="flex items-center gap-4 text-sm text-gray-500">
-                              <span>Multiplicador: {zone.multiplier}x</span>
-                              <span>{zone.services} servicios</span>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Button size="sm" variant="outline">
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button size="sm" variant="outline">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="bg-gray-100 rounded-lg p-4 h-64 flex items-center justify-center">
-                    <div className="text-center text-gray-500">
-                      <MapPin className="h-12 w-12 mx-auto mb-2" />
-                      <p>Mapa de Google Maps</p>
-                      <p className="text-sm">Aquí se mostraría el mapa interactivo</p>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <AdminZoneMap 
+              zones={zones}
+              onZoneUpdate={handleZoneUpdate}
+              mapboxToken={mapboxToken}
+            />
           </TabsContent>
 
           {/* Analytics Tab */}
@@ -416,12 +397,12 @@ const Admin = () => {
                           <div 
                             className="h-2 rounded-full"
                             style={{ 
-                              width: `${(zone.services / 50) * 100}%`,
+                              width: `${Math.min((zones.filter(z => z.id === zone.id).length / zones.length) * 100, 100)}%`,
                               backgroundColor: zone.color 
                             }}
                           ></div>
                         </div>
-                        <span className="text-sm text-gray-600 w-12">{zone.services}</span>
+                        <span className="text-sm text-gray-600">{zone.multiplier}x</span>
                       </div>
                     </div>
                   ))}
