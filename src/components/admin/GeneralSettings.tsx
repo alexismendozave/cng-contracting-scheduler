@@ -31,7 +31,7 @@ const GeneralSettings = () => {
         .from('general_settings')
         .select('setting_value')
         .eq('setting_key', 'central_address')
-        .single();
+        .maybeSingle();
 
       if (error && error.code !== 'PGRST116') {
         console.error('Error fetching central address:', error);
@@ -39,7 +39,6 @@ const GeneralSettings = () => {
       }
 
       if (data?.setting_value) {
-        // Type assertion with proper validation
         const addressData = data.setting_value as any;
         if (addressData && typeof addressData === 'object' && 
             'address' in addressData && 'latitude' in addressData && 
@@ -55,14 +54,18 @@ const GeneralSettings = () => {
   const handleAddressUpdate = async (newAddress: CentralAddress) => {
     setLoading(true);
     try {
+      // Use upsert with the correct conflict resolution
       const { error } = await supabase
         .from('general_settings')
         .upsert({
           setting_key: 'central_address',
           setting_value: newAddress as any
+        }, {
+          onConflict: 'setting_key'
         });
 
       if (error) {
+        console.error('Error saving address:', error);
         toast.error('Error al guardar la dirección: ' + error.message);
       } else {
         setCentralAddress(newAddress);

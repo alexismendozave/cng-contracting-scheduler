@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -14,6 +13,7 @@ import Register from "./pages/Register";
 import AdminLogin from "./pages/AdminLogin";
 import ClientDashboard from "./pages/ClientDashboard";
 import NotFound from "./pages/NotFound";
+import NewBooking from "./pages/NewBooking";
 
 const queryClient = new QueryClient();
 
@@ -26,7 +26,7 @@ function App() {
           <BrowserRouter>
             <Routes>
               <Route path="/" element={<Index />} />
-              <Route path="/booking/:serviceId" element={<Booking />} />
+              <Route path="/booking/:serviceId" element={<NewBooking />} />
               <Route path="/thanks" element={<Thanks />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />

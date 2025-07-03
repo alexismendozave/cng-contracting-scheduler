@@ -114,9 +114,10 @@ const Admin = () => {
 
       <div className="px-6 py-6">
         <Tabs defaultValue="services" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="services">Servicios</TabsTrigger>
             <TabsTrigger value="zones">Zonas</TabsTrigger>
+            <TabsTrigger value="users">Usuarios</TabsTrigger>
             <TabsTrigger value="settings">Configuración</TabsTrigger>
             <TabsTrigger value="apis">APIs</TabsTrigger>
             <TabsTrigger value="payments">Pagos</TabsTrigger>
@@ -146,6 +147,11 @@ const Admin = () => {
               zones={zones}
               onZoneUpdate={handleZoneUpdate}
             />
+          </TabsContent>
+
+          {/* Users Tab */}
+          <TabsContent value="users" className="space-y-6">
+            <UserManagement />
           </TabsContent>
 
           {/* General Settings Tab */}
