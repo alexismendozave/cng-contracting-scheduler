@@ -6,10 +6,10 @@ import { LogOut } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import AdminDashboard from "@/components/admin/AdminDashboard";
-import ServiceManagementWrapper from "@/components/admin/wrappers/ServiceManagementWrapper";
+import ServicesManagement from "@/components/admin/ServicesManagement";
+import BookingsManagement from "@/components/admin/BookingsManagement";
+import CompanyManagement from "@/components/admin/CompanyManagement";
 import EnhancedZoneMapWrapper from "@/components/admin/wrappers/EnhancedZoneMapWrapper";
-import ApiConfigurationWrapper from "@/components/admin/wrappers/ApiConfigurationWrapper";
-import PaymentMethodsWrapper from "@/components/admin/wrappers/PaymentMethodsWrapper";
 import UserManagement from "@/components/admin/UserManagement";
 
 const Admin = () => {
@@ -41,10 +41,12 @@ const Admin = () => {
             <Routes>
               <Route index element={<Navigate to="/admin/dashboard" replace />} />
               <Route path="dashboard" element={<AdminDashboard />} />
-              <Route path="services" element={<ServiceManagementWrapper />} />
+              <Route path="services" element={<ServicesManagement />} />
+              <Route path="bookings" element={<BookingsManagement />} />
+              <Route path="company" element={<CompanyManagement />} />
               <Route path="zones" element={<EnhancedZoneMapWrapper />} />
-              <Route path="apis" element={<ApiConfigurationWrapper />} />
-              <Route path="payments" element={<PaymentMethodsWrapper />} />
+              <Route path="apis" element={<div>APIs en desarrollo</div>} />
+              <Route path="payments" element={<div>Métodos de pago en desarrollo</div>} />
               <Route path="users" element={<UserManagement />} />
               <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
             </Routes>
