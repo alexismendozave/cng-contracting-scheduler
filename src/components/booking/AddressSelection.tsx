@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MapPin, Search, Navigation } from "lucide-react";
 import { toast } from "sonner";
+import mapboxgl from 'mapbox-gl';
+import 'mapbox-gl/dist/mapbox-gl.css';
 
 interface Service {
   id: string;
@@ -34,7 +36,12 @@ interface AddressSelectionProps {
 }
 
 const AddressSelection = ({ service, onAddressSelect }: AddressSelectionProps) => {
+  const mapContainer = useRef<HTMLDivElement>(null);
+  const map = useRef<mapboxgl.Map | null>(null);
+  const marker = useRef<mapboxgl.Marker | null>(null);
+  
   const [address, setAddress] = useState("");
+  const [postalCode, setPostalCode] = useState("");
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<{
     address: string;
@@ -45,9 +52,12 @@ const AddressSelection = ({ service, onAddressSelect }: AddressSelectionProps) =
   const [finalPrice, setFinalPrice] = useState(service.base_price);
   const [loading, setLoading] = useState(false);
   const [googleApiKey, setGoogleApiKey] = useState("");
+  const [mapboxToken, setMapboxToken] = useState("");
+  const [mapLoading, setMapLoading] = useState(true);
+  const [canContinue, setCanContinue] = useState(false);
 
   useEffect(() => {
-    fetchGoogleApiKey();
+    fetchApiKeys();
   }, []);
 
   useEffect(() => {
@@ -56,61 +66,330 @@ const AddressSelection = ({ service, onAddressSelect }: AddressSelectionProps) =
     }
   }, [selectedLocation]);
 
-  const fetchGoogleApiKey = async () => {
+  useEffect(() => {
+    // Allow continue if user has typed an address, even without map confirmation
+    setCanContinue(address.trim().length > 0 || selectedLocation !== null);
+  }, [address, selectedLocation]);
+
+  const fetchApiKeys = async () => {
     try {
-      const { data } = await supabase
+      // Fetch Google Maps API key
+      const { data: googleData } = await supabase
         .from('api_configs')
         .select('api_key')
         .eq('name', 'google_maps')
-        .single();
+        .maybeSingle();
       
-      if (data?.api_key) {
-        setGoogleApiKey(data.api_key);
+      if (googleData?.api_key) {
+        setGoogleApiKey(googleData.api_key);
+      }
+
+      // Fetch Mapbox token
+      const { data: mapboxData } = await supabase
+        .from('api_configs')
+        .select('api_key')
+        .eq('name', 'mapbox')
+        .maybeSingle();
+      
+      if (mapboxData?.api_key) {
+        setMapboxToken(mapboxData.api_key);
+      } else {
+        // Fallback token
+        setMapboxToken('pk.eyJ1IjoiYWxleGlzbWVuZG96YXZlIiwiYSI6ImNtY21vMmpydTBuZ2QybG9uMmRud3VqZW8ifQ.QuPR_Yee1i2pPqm2MMajLA');
       }
     } catch (error) {
-      console.error('Error fetching Google API key:', error);
+      console.error('Error fetching API keys:', error);
+      setMapboxToken('pk.eyJ1IjoiYWxleGlzbWVuZG96YXZlIiwiYSI6ImNtY21vMmpydTBuZ2QybG9uMmRud3VqZW8ifQ.QuPR_Yee1i2pPqm2MMajLA');
+    } finally {
+      setMapLoading(false);
+    }
+  };
+
+  // Initialize map
+  useEffect(() => {
+    if (!mapContainer.current || !mapboxToken || mapLoading) return;
+
+    try {
+      mapboxgl.accessToken = mapboxToken;
+      
+      map.current = new mapboxgl.Map({
+        container: mapContainer.current,
+        style: 'mapbox://styles/mapbox/streets-v12',
+        center: [-99.1332, 19.4326], // Default to Mexico City
+        zoom: 10,
+      });
+
+      map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
+
+      // Handle map click
+      map.current.on('click', async (e) => {
+        const location = {
+          address: `${e.lngLat.lat.toFixed(6)}, ${e.lngLat.lng.toFixed(6)}`,
+          latitude: e.lngLat.lat,
+          longitude: e.lngLat.lng
+        };
+
+        // Try to get readable address
+        try {
+          const readableAddress = await reverseGeocode(e.lngLat.lng, e.lngLat.lat);
+          location.address = readableAddress;
+        } catch (error) {
+          console.error('Error getting readable address:', error);
+        }
+        
+        setSelectedLocation(location);
+        setAddress(location.address);
+        setSuggestions([]);
+        
+        // Add or update marker
+        if (marker.current) {
+          marker.current.setLngLat(e.lngLat);
+        } else {
+          marker.current = new mapboxgl.Marker({
+            color: '#DC2626',
+            draggable: true
+          })
+            .setLngLat(e.lngLat)
+            .addTo(map.current!);
+
+          // Handle marker drag
+          marker.current.on('dragend', async () => {
+            if (!marker.current) return;
+            
+            const lngLat = marker.current.getLngLat();
+            const address = await reverseGeocode(lngLat.lng, lngLat.lat);
+            const newLocation = {
+              address,
+              latitude: lngLat.lat,
+              longitude: lngLat.lng
+            };
+            setSelectedLocation(newLocation);
+            setAddress(address);
+          });
+        }
+      });
+
+      return () => {
+        map.current?.remove();
+      };
+    } catch (error) {
+      console.error('Error initializing map:', error);
+    }
+  }, [mapboxToken, mapLoading]);
+
+  const reverseGeocode = async (lng: number, lat: number): Promise<string> => {
+    if (!mapboxToken) return 'Ubicación seleccionada';
+    
+    try {
+      const response = await fetch(
+        `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${googleApiKey}`
+      );
+      
+      if (response.ok && googleApiKey) {
+        const data = await response.json();
+        if (data.results?.[0]) {
+          return data.results[0].formatted_address;
+        }
+      }
+
+      // Fallback to Mapbox
+      const mapboxResponse = await fetch(
+        `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${mapboxToken}&language=es`
+      );
+      const mapboxData = await mapboxResponse.json();
+      return mapboxData.features?.[0]?.place_name || 'Ubicación seleccionada';
+    } catch (error) {
+      console.error('Error en geocoding:', error);
+      return 'Ubicación seleccionada';
     }
   };
 
   const searchAddresses = async (query: string) => {
-    if (!query.trim() || !googleApiKey) return;
+    if (!query.trim()) return;
 
     try {
-      const response = await fetch(
-        `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&key=${googleApiKey}`
-      );
-      const data = await response.json();
-      
-      if (data.predictions) {
-        setSuggestions(data.predictions);
+      let searchResults = [];
+
+      // Try Google Places first if API key is available
+      if (googleApiKey) {
+        const response = await fetch(
+          `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&key=${googleApiKey}&language=es`
+        );
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.predictions) {
+            searchResults = data.predictions;
+          }
+        }
       }
+
+      // Fallback to Mapbox if no Google results
+      if (searchResults.length === 0 && mapboxToken) {
+        const response = await fetch(
+          `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxToken}&language=es&limit=5`
+        );
+        const data = await response.json();
+        
+        if (data.features) {
+          searchResults = data.features.map((feature: any) => ({
+            place_id: feature.id,
+            description: feature.place_name,
+            geometry: {
+              location: {
+                lat: feature.center[1],
+                lng: feature.center[0]
+              }
+            }
+          }));
+        }
+      }
+
+      setSuggestions(searchResults);
     } catch (error) {
       console.error('Error searching addresses:', error);
     }
   };
 
-  const selectAddress = async (placeId: string, description: string) => {
-    if (!googleApiKey) return;
+  const searchByPostalCode = async () => {
+    if (!postalCode.trim()) {
+      toast.error('Por favor ingresa un código postal');
+      return;
+    }
 
+    setLoading(true);
     try {
-      const response = await fetch(
-        `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&key=${googleApiKey}`
-      );
-      const data = await response.json();
-      
-      if (data.result?.geometry?.location) {
-        const location = {
-          address: description,
-          latitude: data.result.geometry.location.lat,
-          longitude: data.result.geometry.location.lng
-        };
+      let location = null;
+
+      // Try Google first
+      if (googleApiKey) {
+        const response = await fetch(
+          `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(postalCode)}&key=${googleApiKey}`
+        );
         
+        if (response.ok) {
+          const data = await response.json();
+          if (data.results?.[0]) {
+            const result = data.results[0];
+            location = {
+              address: result.formatted_address,
+              latitude: result.geometry.location.lat,
+              longitude: result.geometry.location.lng
+            };
+          }
+        }
+      }
+
+      // Fallback to Mapbox
+      if (!location && mapboxToken) {
+        const response = await fetch(
+          `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(postalCode)}.json?access_token=${mapboxToken}&language=es&limit=1`
+        );
+        const data = await response.json();
+        
+        if (data.features?.[0]) {
+          const feature = data.features[0];
+          location = {
+            address: feature.place_name,
+            latitude: feature.center[1],
+            longitude: feature.center[0]
+          };
+        }
+      }
+
+      if (location) {
         setSelectedLocation(location);
-        setAddress(description);
+        setAddress(location.address);
         setSuggestions([]);
+        
+        // Update map
+        if (map.current) {
+          map.current.flyTo({
+            center: [location.longitude, location.latitude],
+            zoom: 14
+          });
+          
+          if (marker.current) {
+            marker.current.setLngLat([location.longitude, location.latitude]);
+          } else {
+            marker.current = new mapboxgl.Marker({
+              color: '#DC2626',
+              draggable: true
+            })
+              .setLngLat([location.longitude, location.latitude])
+              .addTo(map.current!);
+          }
+        }
+        
+        toast.success('Ubicación encontrada');
+      } else {
+        toast.error('No se pudo encontrar el código postal');
       }
     } catch (error) {
-      console.error('Error getting place details:', error);
+      console.error('Error searching postal code:', error);
+      toast.error('Error al buscar el código postal');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const selectAddress = async (suggestion: any) => {
+    try {
+      let location = null;
+
+      // Handle Google Places result
+      if (suggestion.place_id && googleApiKey) {
+        const response = await fetch(
+          `https://maps.googleapis.com/maps/api/place/details/json?place_id=${suggestion.place_id}&key=${googleApiKey}`
+        );
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.result?.geometry?.location) {
+            location = {
+              address: suggestion.description,
+              latitude: data.result.geometry.location.lat,
+              longitude: data.result.geometry.location.lng
+            };
+          }
+        }
+      }
+
+      // Handle Mapbox result or fallback
+      if (!location && suggestion.geometry?.location) {
+        location = {
+          address: suggestion.description,
+          latitude: suggestion.geometry.location.lat,
+          longitude: suggestion.geometry.location.lng
+        };
+      }
+
+      if (location) {
+        setSelectedLocation(location);
+        setAddress(location.address);
+        setSuggestions([]);
+        
+        // Update map
+        if (map.current) {
+          map.current.flyTo({
+            center: [location.longitude, location.latitude],
+            zoom: 14
+          });
+          
+          if (marker.current) {
+            marker.current.setLngLat([location.longitude, location.latitude]);
+          } else {
+            marker.current = new mapboxgl.Marker({
+              color: '#DC2626',
+              draggable: true
+            })
+              .setLngLat([location.longitude, location.latitude])
+              .addTo(map.current!);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error selecting address:', error);
     }
   };
 
@@ -121,28 +400,35 @@ const AddressSelection = ({ service, onAddressSelect }: AddressSelectionProps) =
         async (position) => {
           const { latitude, longitude } = position.coords;
           
-          // Reverse geocode to get address
-          if (googleApiKey) {
-            try {
-              const response = await fetch(
-                `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${googleApiKey}`
-              );
-              const data = await response.json();
-              
-              if (data.results?.[0]) {
-                const location = {
-                  address: data.results[0].formatted_address,
-                  latitude,
-                  longitude
-                };
-                
-                setSelectedLocation(location);
-                setAddress(location.address);
-              }
-            } catch (error) {
-              console.error('Error reverse geocoding:', error);
+          const address = await reverseGeocode(longitude, latitude);
+          const location = {
+            address,
+            latitude,
+            longitude
+          };
+          
+          setSelectedLocation(location);
+          setAddress(location.address);
+          
+          // Update map
+          if (map.current) {
+            map.current.flyTo({
+              center: [longitude, latitude],
+              zoom: 14
+            });
+            
+            if (marker.current) {
+              marker.current.setLngLat([longitude, latitude]);
+            } else {
+              marker.current = new mapboxgl.Marker({
+                color: '#DC2626',
+                draggable: true
+              })
+                .setLngLat([longitude, latitude])
+                .addTo(map.current!);
             }
           }
+          
           setLoading(false);
         },
         (error) => {
@@ -161,8 +447,6 @@ const AddressSelection = ({ service, onAddressSelect }: AddressSelectionProps) =
         .select('*')
         .eq('is_active', true);
 
-      // This is a simplified zone check - in a real app you'd use proper geospatial queries
-      // For now, we'll just check if there are any zones and assign the first one
       if (zones && zones.length > 0) {
         const selectedZone = zones[0];
         setZone(selectedZone);
@@ -182,15 +466,22 @@ const AddressSelection = ({ service, onAddressSelect }: AddressSelectionProps) =
   };
 
   const handleContinue = () => {
-    if (!selectedLocation) {
-      toast.error('Por favor selecciona una dirección');
+    if (!canContinue) {
+      toast.error('Por favor ingresa una dirección');
       return;
     }
 
+    // Use selected location if available, otherwise use manual address
+    const locationData = selectedLocation || {
+      address: address,
+      latitude: 0,
+      longitude: 0
+    };
+
     onAddressSelect({
-      address: selectedLocation.address,
-      latitude: selectedLocation.latitude,
-      longitude: selectedLocation.longitude,
+      address: locationData.address,
+      latitude: locationData.latitude,
+      longitude: locationData.longitude,
       zone: zone || undefined,
       finalPrice
     });
@@ -198,6 +489,7 @@ const AddressSelection = ({ service, onAddressSelect }: AddressSelectionProps) =
 
   return (
     <div className="space-y-6">
+      {/* Address Search */}
       <div className="space-y-4">
         <div>
           <Label htmlFor="address">Buscar dirección</Label>
@@ -209,20 +501,20 @@ const AddressSelection = ({ service, onAddressSelect }: AddressSelectionProps) =
                 setAddress(e.target.value);
                 searchAddresses(e.target.value);
               }}
-              placeholder="Escribe tu dirección..."
+              placeholder="Escribe tu dirección completa..."
               className="pr-10"
             />
             <Search className="absolute right-3 top-3 h-4 w-4 text-gray-400" />
           </div>
           
           {suggestions.length > 0 && (
-            <Card className="mt-2">
+            <Card className="mt-2 max-h-48 overflow-y-auto">
               <CardContent className="p-2">
-                {suggestions.map((suggestion) => (
+                {suggestions.map((suggestion, index) => (
                   <div
-                    key={suggestion.place_id}
+                    key={suggestion.place_id || index}
                     className="p-2 hover:bg-gray-100 cursor-pointer rounded"
-                    onClick={() => selectAddress(suggestion.place_id, suggestion.description)}
+                    onClick={() => selectAddress(suggestion)}
                   >
                     <div className="flex items-center gap-2">
                       <MapPin className="h-4 w-4 text-gray-400" />
@@ -233,6 +525,29 @@ const AddressSelection = ({ service, onAddressSelect }: AddressSelectionProps) =
               </CardContent>
             </Card>
           )}
+        </div>
+
+        {/* Postal Code Search */}
+        <div className="flex gap-2">
+          <div className="flex-1">
+            <Label htmlFor="postal-code">Código Postal</Label>
+            <Input
+              id="postal-code"
+              value={postalCode}
+              onChange={(e) => setPostalCode(e.target.value)}
+              placeholder="Ej: 06100"
+              onKeyPress={(e) => e.key === 'Enter' && searchByPostalCode()}
+            />
+          </div>
+          <div className="flex items-end">
+            <Button 
+              onClick={searchByPostalCode} 
+              variant="outline"
+              disabled={loading}
+            >
+              {loading ? 'Buscando...' : 'Buscar CP'}
+            </Button>
+          </div>
         </div>
 
         <div className="flex justify-center">
@@ -248,6 +563,22 @@ const AddressSelection = ({ service, onAddressSelect }: AddressSelectionProps) =
         </div>
       </div>
 
+      {/* Map */}
+      {!mapLoading && mapboxToken && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Mapa</CardTitle>
+            <p className="text-sm text-gray-600">
+              Haz clic en el mapa para seleccionar tu ubicación exacta
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div ref={mapContainer} className="w-full h-64 rounded-lg border" />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Selected Location Display */}
       {selectedLocation && (
         <Card>
           <CardHeader>
@@ -293,14 +624,27 @@ const AddressSelection = ({ service, onAddressSelect }: AddressSelectionProps) =
                   </div>
                 )}
               </div>
-              
-              <Button onClick={handleContinue} className="w-full">
-                Continuar con esta dirección
-              </Button>
             </div>
           </CardContent>
         </Card>
       )}
+
+      {/* Continue Button */}
+      <div className="flex flex-col gap-3">
+        <Button 
+          onClick={handleContinue} 
+          className="w-full"
+          disabled={!canContinue}
+        >
+          Continuar {selectedLocation ? 'con ubicación confirmada' : 'con dirección ingresada'}
+        </Button>
+        
+        {!selectedLocation && address.trim().length > 0 && (
+          <p className="text-sm text-gray-600 text-center">
+            Puedes continuar con la dirección que escribiste, aunque no la hayas confirmado en el mapa
+          </p>
+        )}
+      </div>
     </div>
   );
 };
