@@ -1,191 +1,57 @@
 
-import { useState, useEffect } from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Routes, Route, Navigate } from "react-router-dom";
+import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
-import EnhancedZoneMap from "@/components/admin/EnhancedZoneMap";
-import ServiceManagement from "@/components/admin/ServiceManagement";
-import ServiceZonePricing from "@/components/admin/ServiceZonePricing";
-import ApiConfiguration from "@/components/admin/ApiConfiguration";
-import PaymentMethods from "@/components/admin/PaymentMethods";
-import Analytics from "@/components/admin/Analytics";
-import GeneralSettings from "@/components/admin/GeneralSettings";
+import { AdminSidebar } from "@/components/admin/AdminSidebar";
+import AdminDashboard from "@/components/admin/AdminDashboard";
+import ServiceManagementWrapper from "@/components/admin/wrappers/ServiceManagementWrapper";
+import EnhancedZoneMapWrapper from "@/components/admin/wrappers/EnhancedZoneMapWrapper";
+import ApiConfigurationWrapper from "@/components/admin/wrappers/ApiConfigurationWrapper";
+import PaymentMethodsWrapper from "@/components/admin/wrappers/PaymentMethodsWrapper";
 import UserManagement from "@/components/admin/UserManagement";
-import { Zone, Service, ServiceZonePrice, ApiConfig, PaymentMethod } from "@/components/admin/types";
 
 const Admin = () => {
-  const { user, profile, signOut } = useAuth();
-  const [zones, setZones] = useState<Zone[]>([]);
-  const [services, setServices] = useState<Service[]>([]);
-  const [serviceZonePrices, setServiceZonePrices] = useState<ServiceZonePrice[]>([]);
-  const [apiConfigs, setApiConfigs] = useState<ApiConfig[]>([]);
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
-    setLoading(true);
-    
-    try {
-      // Fetch zones
-      const { data: zonesData } = await supabase
-        .from('zones')
-        .select('*')
-        .order('name');
-      
-      // Fetch services
-      const { data: servicesData } = await supabase
-        .from('services')
-        .select('*')
-        .order('name');
-      
-      // Fetch service zone prices
-      const { data: serviceZoneData } = await supabase
-        .from('service_zone_prices')
-        .select('*');
-      
-      // Fetch API configs
-      const { data: apiData } = await supabase
-        .from('api_configs')
-        .select('*')
-        .order('name');
-      
-      // Fetch payment methods
-      const { data: paymentData } = await supabase
-        .from('payment_methods')
-        .select('*')
-        .order('name');
-
-      setZones(zonesData || []);
-      setServices(servicesData || []);
-      setServiceZonePrices(serviceZoneData || []);
-      setApiConfigs(apiData || []);
-      setPaymentMethods(paymentData || []);
-      
-    } catch (error) {
-      console.error('Error fetching data:', error);
-      toast.error('Error al cargar datos');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleZoneUpdate = (updatedZones: Zone[]) => {
-    setZones(updatedZones);
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-2 text-gray-600">Cargando panel administrativo...</p>
-        </div>
-      </div>
-    );
-  }
+  const { profile, signOut } = useAuth();
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Panel Administrativo</h1>
-              <p className="text-gray-600">
-                Bienvenido, {profile?.full_name} ({profile?.role})
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <Button onClick={signOut} variant="outline">
+    <SidebarProvider>
+      <div className="min-h-screen flex w-full bg-background">
+        <AdminSidebar />
+        <SidebarInset className="flex-1">
+          {/* Header */}
+          <header className="sticky top-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border z-40">
+            <div className="flex h-14 items-center gap-4 px-6">
+              <SidebarTrigger />
+              <div className="flex-1">
+                <h1 className="text-lg font-semibold text-foreground">
+                  Bienvenido, {profile?.full_name}
+                </h1>
+              </div>
+              <Button onClick={signOut} variant="outline" size="sm">
                 <LogOut className="h-4 w-4 mr-2" />
                 Cerrar Sesión
               </Button>
             </div>
-          </div>
-        </div>
-      </header>
+          </header>
 
-      <div className="px-6 py-6">
-        <Tabs defaultValue="services" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-7">
-            <TabsTrigger value="services">Servicios</TabsTrigger>
-            <TabsTrigger value="zones">Zonas</TabsTrigger>
-            <TabsTrigger value="users">Usuarios</TabsTrigger>
-            <TabsTrigger value="settings">Configuración</TabsTrigger>
-            <TabsTrigger value="apis">APIs</TabsTrigger>
-            <TabsTrigger value="payments">Pagos</TabsTrigger>
-            <TabsTrigger value="analytics">Análisis</TabsTrigger>
-          </TabsList>
-
-          {/* Services Tab */}
-          <TabsContent value="services" className="space-y-6">
-            <div className="grid gap-6">
-              <ServiceManagement 
-                services={services}
-                zones={zones}
-                onDataRefresh={fetchData}
-              />
-              <ServiceZonePricing 
-                services={services}
-                zones={zones}
-                serviceZonePrices={serviceZonePrices}
-                onDataRefresh={fetchData}
-              />
-            </div>
-          </TabsContent>
-
-          {/* Zones Tab */}
-          <TabsContent value="zones" className="space-y-6">
-            <EnhancedZoneMap 
-              zones={zones}
-              onZoneUpdate={handleZoneUpdate}
-            />
-          </TabsContent>
-
-          {/* Users Tab */}
-          <TabsContent value="users" className="space-y-6">
-            <UserManagement />
-          </TabsContent>
-
-          {/* General Settings Tab */}
-          <TabsContent value="settings" className="space-y-6">
-            <GeneralSettings />
-          </TabsContent>
-
-          {/* APIs Tab */}
-          <TabsContent value="apis" className="space-y-6">
-            <ApiConfiguration 
-              apiConfigs={apiConfigs}
-              onDataRefresh={fetchData}
-            />
-          </TabsContent>
-
-          {/* Payment Methods Tab */}
-          <TabsContent value="payments" className="space-y-6">
-            <PaymentMethods 
-              paymentMethods={paymentMethods}
-              onDataRefresh={fetchData}
-            />
-          </TabsContent>
-
-          {/* Analytics Tab */}
-          <TabsContent value="analytics" className="space-y-6">
-            <Analytics 
-              services={services}
-              zones={zones}
-            />
-          </TabsContent>
-        </Tabs>
+          {/* Content */}
+          <main className="flex-1 p-6">
+            <Routes>
+              <Route index element={<Navigate to="/admin/dashboard" replace />} />
+              <Route path="dashboard" element={<AdminDashboard />} />
+              <Route path="services" element={<ServiceManagementWrapper />} />
+              <Route path="zones" element={<EnhancedZoneMapWrapper />} />
+              <Route path="apis" element={<ApiConfigurationWrapper />} />
+              <Route path="payments" element={<PaymentMethodsWrapper />} />
+              <Route path="users" element={<UserManagement />} />
+              <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
+            </Routes>
+          </main>
+        </SidebarInset>
       </div>
-    </div>
+    </SidebarProvider>
   );
 };
 
