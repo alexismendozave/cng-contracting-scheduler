@@ -58,10 +58,12 @@ const AddressSelection = ({ service, onAddressSelect }: AddressSelectionProps) =
   const [mapboxToken, setMapboxToken] = useState("");
   const [mapLoading, setMapLoading] = useState(true);
   const [canContinue, setCanContinue] = useState(false);
+  const [centralAddress, setCentralAddress] = useState<{latitude: number, longitude: number, zoom: number} | null>(null);
 
   useEffect(() => {
     fetchApiKeys();
     fetchZones();
+    fetchCentralAddress();
   }, []);
 
   useEffect(() => {
@@ -73,6 +75,27 @@ const AddressSelection = ({ service, onAddressSelect }: AddressSelectionProps) =
   useEffect(() => {
     setCanContinue(address.trim().length > 0 || selectedLocation !== null);
   }, [address, selectedLocation]);
+
+  const fetchCentralAddress = async () => {
+    try {
+      const { data } = await supabase
+        .from('general_settings')
+        .select('setting_value')
+        .eq('setting_key', 'central_address')
+        .maybeSingle();
+
+      if (data?.setting_value) {
+        const addressData = data.setting_value as any;
+        setCentralAddress({
+          latitude: addressData.latitude,
+          longitude: addressData.longitude,
+          zoom: addressData.zoom
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching central address:', error);
+    }
+  };
 
   const fetchApiKeys = async () => {
     try {
@@ -127,6 +150,44 @@ const AddressSelection = ({ service, onAddressSelect }: AddressSelectionProps) =
     }
   };
 
+  // Calculate center based on zones or central address
+  const getMapCenter = (): [number, number] => {
+    // If we have zones with coordinates, center on them
+    if (zones.length > 0) {
+      const validZones = zones.filter(zone => zone.coordinates && zone.coordinates.length > 0);
+      if (validZones.length > 0) {
+        let totalLat = 0;
+        let totalLng = 0;
+        let pointCount = 0;
+        
+        validZones.forEach(zone => {
+          zone.coordinates.forEach(coord => {
+            totalLng += coord[0];
+            totalLat += coord[1];
+            pointCount++;
+          });
+        });
+        
+        if (pointCount > 0) {
+          return [totalLng / pointCount, totalLat / pointCount];
+        }
+      }
+    }
+    
+    // Use central address if available
+    if (centralAddress) {
+      return [centralAddress.longitude, centralAddress.latitude];
+    }
+    
+    // Default fallback
+    return [-99.1332, 19.4326];
+  };
+
+  const getMapZoom = (): number => {
+    if (centralAddress) return centralAddress.zoom;
+    return 10;
+  };
+
   // Initialize map
   useEffect(() => {
     if (!mapContainer.current || !mapboxToken || mapLoading) return;
@@ -134,11 +195,14 @@ const AddressSelection = ({ service, onAddressSelect }: AddressSelectionProps) =
     try {
       mapboxgl.accessToken = mapboxToken;
       
+      const mapCenter = getMapCenter();
+      const mapZoom = getMapZoom();
+      
       map.current = new mapboxgl.Map({
         container: mapContainer.current,
         style: 'mapbox://styles/mapbox/streets-v12',
-        center: [-99.1332, 19.4326],
-        zoom: 10,
+        center: mapCenter,
+        zoom: mapZoom,
       });
 
       map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
@@ -218,9 +282,15 @@ const AddressSelection = ({ service, onAddressSelect }: AddressSelectionProps) =
           if (zone) {
             setSelectedZone(zone);
             updateZoneHighlight(zone.id);
+            // Don't clear the existing location when clicking on a zone
+            if (selectedLocation) {
+              checkZone(selectedLocation.latitude, selectedLocation.longitude);
+            }
+            return; // Don't set a new location when clicking on a zone
           }
         }
 
+        // Only set new location if clicking outside zones
         const location = {
           address: `${e.lngLat.lat.toFixed(6)}, ${e.lngLat.lng.toFixed(6)}`,
           latitude: e.lngLat.lat,
@@ -271,7 +341,7 @@ const AddressSelection = ({ service, onAddressSelect }: AddressSelectionProps) =
     } catch (error) {
       console.error('Error initializing map:', error);
     }
-  }, [mapboxToken, mapLoading, zones, selectedZone]);
+  }, [mapboxToken, mapLoading, zones, selectedZone, centralAddress]);
 
   const createZoneLabel = (zone: Zone) => {
     const el = document.createElement('div');
@@ -331,47 +401,64 @@ const AddressSelection = ({ service, onAddressSelect }: AddressSelectionProps) =
   };
 
   const searchAddresses = async (query: string) => {
-    if (!query.trim()) return;
+    if (!query.trim() || query.length < 3) {
+      setSuggestions([]);
+      return;
+    }
 
     try {
       let searchResults = [];
 
+      // Try Google Places API first if available
       if (googleApiKey) {
-        const response = await fetch(
-          `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&key=${googleApiKey}&language=es`
-        );
-        
-        if (response.ok) {
-          const data = await response.json();
-          if (data.predictions) {
-            searchResults = data.predictions;
+        try {
+          const response = await fetch(
+            `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&key=${googleApiKey}&language=es`
+          );
+          
+          if (response.ok) {
+            const data = await response.json();
+            if (data.predictions && data.predictions.length > 0) {
+              searchResults = data.predictions.slice(0, 5);
+            }
           }
+        } catch (error) {
+          console.error('Google Places API error:', error);
         }
       }
 
+      // Fallback to Mapbox if Google didn't work or no results
       if (searchResults.length === 0 && mapboxToken) {
-        const response = await fetch(
-          `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxToken}&language=es&limit=5`
-        );
-        const data = await response.json();
-        
-        if (data.features) {
-          searchResults = data.features.map((feature: any) => ({
-            place_id: feature.id,
-            description: feature.place_name,
-            geometry: {
-              location: {
-                lat: feature.center[1],
-                lng: feature.center[0]
-              }
+        try {
+          const response = await fetch(
+            `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxToken}&language=es&limit=5`
+          );
+          
+          if (response.ok) {
+            const data = await response.json();
+            
+            if (data.features && data.features.length > 0) {
+              searchResults = data.features.map((feature: any) => ({
+                place_id: feature.id,
+                description: feature.place_name,
+                geometry: {
+                  location: {
+                    lat: feature.center[1],
+                    lng: feature.center[0]
+                  }
+                }
+              }));
             }
-          }));
+          }
+        } catch (error) {
+          console.error('Mapbox geocoding error:', error);
         }
       }
 
       setSuggestions(searchResults);
     } catch (error) {
       console.error('Error searching addresses:', error);
+      setSuggestions([]);
     }
   };
 
