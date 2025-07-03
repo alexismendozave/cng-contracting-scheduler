@@ -1,245 +1,285 @@
-
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Calendar, Star, Clock, Wrench, Zap, Paintbrush, Droplets, Hammer, Home } from "lucide-react";
+import React from "react";
 import { Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { ServiceCard } from "@/components/ServiceCard";
+import { 
+  Wrench, 
+  Lightbulb, 
+  Paintbrush2, 
+  Droplets, 
+  Phone, 
+  Mail, 
+  MapPin,
+  Star,
+  Clock,
+  Shield,
+  User,
+  LogIn
+} from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 
 const Index = () => {
-  const [selectedCategory, setSelectedCategory] = useState("all");
+  const { user, profile, signOut } = useAuth();
 
-  const serviceCategories = [
-    { id: "all", name: "Todos", icon: Home, color: "bg-blue-500" },
-    { id: "plumbing", name: "Plomería", icon: Droplets, color: "bg-blue-600" },
-    { id: "electrical", name: "Electricidad", icon: Zap, color: "bg-yellow-500" },
-    { id: "painting", name: "Pintura", icon: Paintbrush, color: "bg-green-500" },
-    { id: "general", name: "General", icon: Hammer, color: "bg-gray-600" },
-  ];
-
-  // Mock services data (estos vendrían de WooCommerce API)
   const services = [
     {
       id: 1,
-      woocommerce_id: 123,
       name: "Reparación de Plomería",
-      category: "plumbing",
-      description: "Reparación de fugas, instalación de grifos, destapado de tuberías",
-      basePrice: 89,
-      duration: "1-2 horas",
-      isPackage: false,
-      rating: 4.9,
-      reviews: 127
+      description: "Solucionamos todo tipo de problemas de plomería, desde fugas hasta instalaciones completas.",
+      icon: <Droplets className="h-6 w-6 text-blue-500" />,
+      price: "Desde $89",
+      rating: 4.5,
+      reviews: 120
     },
     {
       id: 2,
-      woocommerce_id: 124,
       name: "Instalación Eléctrica",
-      category: "electrical",
-      description: "Instalación de tomacorrientes, luces, reparación de circuitos",
-      basePrice: 95,
-      duration: "1-3 horas",
-      isPackage: false,
+      description: "Instalamos y reparamos sistemas eléctricos para hogares y negocios.",
+      icon: <Lightbulb className="h-6 w-6 text-yellow-500" />,
+      price: "Desde $95",
       rating: 4.8,
-      reviews: 89
+      reviews: 150
     },
     {
       id: 3,
-      woocommerce_id: 125,
       name: "Pintura Interior",
-      category: "painting",
-      description: "Pintura de habitaciones, acabados profesionales",
-      basePrice: 150,
-      duration: "4-8 horas",
-      isPackage: false,
-      rating: 4.9,
-      reviews: 156
-    },
-    {
-      id: 4,
-      woocommerce_id: 126,
-      name: "Paquete Renovación Baño",
-      category: "plumbing",
-      description: "Plomería + Electricidad + Pintura para baño completo",
-      basePrice: 299,
-      duration: "1-2 días",
-      isPackage: true,
-      rating: 5.0,
-      reviews: 45
-    },
-    {
-      id: 5,
-      woocommerce_id: 127,
-      name: "Reparaciones Generales",
-      category: "general",
-      description: "Montaje de muebles, reparaciones menores, mantenimiento",
-      basePrice: 75,
-      duration: "1-2 horas",
-      isPackage: false,
-      rating: 4.7,
-      reviews: 203
+      description: "Transformamos tus espacios con servicios de pintura de alta calidad.",
+      icon: <Paintbrush2 className="h-6 w-6 text-green-500" />,
+      price: "Desde $150",
+      rating: 4.2,
+      reviews: 90
     }
   ];
 
-  const filteredServices = selectedCategory === "all" 
-    ? services 
-    : services.filter(service => service.category === selectedCategory);
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+    <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-lg">
+      <header className="bg-white shadow-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="bg-blue-600 p-2 rounded-lg">
-                <Wrench className="h-8 w-8 text-white" />
+            <div className="flex items-center space-x-4">
+              <div className="bg-blue-600 text-white p-2 rounded-lg">
+                <Wrench className="h-6 w-6" />
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">CNG Contracting</h1>
-                <p className="text-sm text-gray-600">Professional Handyman Services</p>
+                <p className="text-gray-600 text-sm">Servicios profesionales a domicilio</p>
               </div>
             </div>
-            <nav className="hidden md:flex items-center space-x-6">
-              <Button className="bg-blue-600 hover:bg-blue-700">
-                <Link to="/admin">Admin</Link>
-              </Button>
-            </nav>
+            
+            <div className="flex items-center gap-3">
+              {user ? (
+                <>
+                  <Link to={profile?.role === 'client' ? '/dashboard' : '/admin'}>
+                    <Button variant="outline" size="sm">
+                      <User className="h-4 w-4 mr-2" />
+                      Mi Panel
+                    </Button>
+                  </Link>
+                  <Button onClick={signOut} variant="outline" size="sm">
+                    Cerrar Sesión
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Link to="/login">
+                    <Button variant="outline" size="sm">
+                      <LogIn className="h-4 w-4 mr-2" />
+                      Iniciar Sesión
+                    </Button>
+                  </Link>
+                  <Link to="/register">
+                    <Button size="sm" className="bg-blue-600 hover:bg-blue-700">
+                      Registrarse
+                    </Button>
+                  </Link>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </header>
 
       {/* Hero Section */}
-      <section className="py-20 px-4">
-        <div className="container mx-auto text-center">
-          <h2 className="text-5xl font-bold text-gray-900 mb-6">
-            Servicios de <span className="text-blue-600">Handyman</span> Profesionales
-          </h2>
-          <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
-            Reparaciones y servicios a domicilio en toda el área metropolitana de Canadá. 
-            Profesionales certificados, precios transparentes, garantía incluida.
-          </p>
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 max-w-md mx-auto">
-            <h3 className="text-lg font-semibold text-blue-800 mb-2">Proceso de Reserva Simple</h3>
-            <div className="text-sm text-blue-700 space-y-1">
-              <p>✓ Paso 1: Elige tu servicio</p>
-              <p>✓ Paso 2: Ver detalles y continuar</p>
-              <p>✓ Paso 3: Selecciona tu zona</p>
-              <p>✓ Paso 4: Elige fecha y hora</p>
-              <p>✓ Paso 5: Datos y pago seguro</p>
+      <section className="bg-gray-100 py-20">
+        <div className="container mx-auto px-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+            <div>
+              <h2 className="text-4xl font-bold text-gray-900 mb-4">
+                Servicios Profesionales para tu Hogar
+              </h2>
+              <p className="text-lg text-gray-700 mb-6">
+                Encuentra los mejores profesionales para realizar tus proyectos y reparaciones en el hogar.
+              </p>
+              <Button size="lg" className="bg-blue-600 hover:bg-blue-700">
+                Explorar Servicios
+              </Button>
+            </div>
+            <div>
+              <img
+                src="https://images.unsplash.com/photo-1617175865449-f9269941afa7?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80"
+                alt="Servicios para el hogar"
+                className="rounded-lg shadow-lg"
+              />
             </div>
           </div>
         </div>
       </section>
 
       {/* Services Section */}
-      <section className="py-20 bg-gray-50">
+      <section className="py-12">
         <div className="container mx-auto px-4">
-          <div className="text-center mb-12">
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">Nuestros Servicios</h2>
-            <p className="text-xl text-gray-600">Servicios profesionales para tu hogar</p>
-          </div>
-
-          {/* Category Filter */}
-          <div className="flex flex-wrap justify-center gap-3 mb-12">
-            {serviceCategories.map((category) => {
-              const Icon = category.icon;
-              return (
-                <Button
-                  key={category.id}
-                  variant={selectedCategory === category.id ? "default" : "outline"}
-                  onClick={() => setSelectedCategory(category.id)}
-                  className={`flex items-center gap-2 ${
-                    selectedCategory === category.id 
-                      ? "bg-blue-600 hover:bg-blue-700" 
-                      : ""
-                  }`}
-                >
-                  <Icon className="h-4 w-4" />
-                  {category.name}
-                </Button>
-              );
-            })}
-          </div>
-
-          {/* Services Grid */}
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {filteredServices.map((service) => (
-              <Card key={service.id} className="hover:shadow-lg transition-shadow duration-300">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg">{service.name}</CardTitle>
-                    {service.isPackage && (
-                      <Badge variant="secondary" className="bg-purple-100 text-purple-800">
-                        Paquete
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center">
-                      <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                      <span className="text-sm font-medium ml-1">{service.rating}</span>
-                    </div>
-                    <span className="text-sm text-gray-500">({service.reviews} reseñas)</span>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <CardDescription className="mb-4">
-                    {service.description}
-                  </CardDescription>
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center text-sm text-gray-600">
-                      <Clock className="h-4 w-4 mr-1" />
-                      {service.duration}
-                    </div>
-                    <div className="text-right">
-                      <span className="text-sm text-gray-500">Desde</span>
-                      <div className="text-2xl font-bold text-blue-600">
-                        ${service.basePrice}
-                      </div>
-                      <span className="text-xs text-gray-500">*Precio varía por zona</span>
-                    </div>
-                  </div>
-                  <Button className="w-full bg-blue-600 hover:bg-blue-700" asChild>
-                    <Link to={`/booking/${service.id}`}>
-                      Iniciar Reserva
-                    </Link>
-                  </Button>
-                </CardContent>
-              </Card>
+          <h2 className="text-3xl font-bold text-gray-900 mb-8 text-center">
+            Nuestros Servicios
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {services.map((service) => (
+              <ServiceCard key={service.id} service={service} />
             ))}
           </div>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="bg-gray-900 text-white py-12">
+      {/* Why Choose Us Section */}
+      <section className="bg-blue-50 py-16">
         <div className="container mx-auto px-4">
-          <div className="grid md:grid-cols-2 gap-8">
-            <div>
-              <div className="flex items-center space-x-3 mb-4">
-                <div className="bg-blue-600 p-2 rounded-lg">
-                  <Wrench className="h-6 w-6 text-white" />
-                </div>
-                <span className="text-xl font-bold">CNG Contracting</span>
-              </div>
-              <p className="text-gray-400">
-                Servicios profesionales de handyman en Canadá. Calidad garantizada.
+          <h2 className="text-3xl font-bold text-gray-900 mb-8 text-center">
+            ¿Por qué elegirnos?
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {/* Professional Team */}
+            <div className="text-center">
+              <Wrench className="h-12 w-12 text-blue-600 mx-auto mb-4" />
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                Equipo Profesional
+              </h3>
+              <p className="text-gray-700">
+                Contamos con un equipo de expertos altamente capacitados y
+                certificados.
               </p>
             </div>
-            <div>
-              <h4 className="text-lg font-semibold mb-4">Servicios</h4>
-              <ul className="space-y-2 text-gray-400">
-                <li>Plomería</li>
-                <li>Electricidad</li>
-                <li>Pintura</li>
-                <li>Reparaciones Generales</li>
-              </ul>
+
+            {/* Quality Guarantee */}
+            <div className="text-center">
+              <Shield className="h-12 w-12 text-blue-600 mx-auto mb-4" />
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                Garantía de Calidad
+              </h3>
+              <p className="text-gray-700">
+                Ofrecemos garantía en todos nuestros servicios para tu
+                tranquilidad.
+              </p>
+            </div>
+
+            {/* Customer Satisfaction */}
+            <div className="text-center">
+              <Star className="h-12 w-12 text-blue-600 mx-auto mb-4" />
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                Satisfacción del Cliente
+              </h3>
+              <p className="text-gray-700">
+                Nuestro principal objetivo es superar las expectativas de
+                nuestros clientes.
+              </p>
             </div>
           </div>
-          <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
-            <p>&copy; 2024 CNG Contracting. Todos los derechos reservados.</p>
+        </div>
+      </section>
+
+      {/* Contact Section */}
+      <section className="py-12">
+        <div className="container mx-auto px-4">
+          <h2 className="text-3xl font-bold text-gray-900 mb-8 text-center">
+            Contáctanos
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* Contact Form */}
+            <div>
+              <p className="text-gray-700 mb-4">
+                ¿Tienes alguna pregunta o necesitas un presupuesto? Contáctanos
+                y te atenderemos con gusto.
+              </p>
+              <form className="space-y-4">
+                <div>
+                  <label
+                    htmlFor="name"
+                    className="block text-sm font-medium text-gray-700"
+                  >
+                    Nombre
+                  </label>
+                  <input
+                    type="text"
+                    id="name"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                    placeholder="Tu nombre"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="email"
+                    className="block text-sm font-medium text-gray-700"
+                  >
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    id="email"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                    placeholder="Tu email"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="message"
+                    className="block text-sm font-medium text-gray-700"
+                  >
+                    Mensaje
+                  </label>
+                  <textarea
+                    id="message"
+                    rows={4}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                    placeholder="Escribe tu mensaje aquí..."
+                  />
+                </div>
+                <Button className="bg-blue-600 hover:bg-blue-700">
+                  Enviar Mensaje
+                </Button>
+              </form>
+            </div>
+
+            {/* Contact Information */}
+            <div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-4">
+                Información de Contacto
+              </h3>
+              <div className="space-y-2">
+                <div className="flex items-center text-gray-700">
+                  <Phone className="h-5 w-5 mr-2 text-blue-500" />
+                  +52 55 1234 5678
+                </div>
+                <div className="flex items-center text-gray-700">
+                  <Mail className="h-5 w-5 mr-2 text-blue-500" />
+                  info@cngcontracting.com
+                </div>
+                <div className="flex items-center text-gray-700">
+                  <MapPin className="h-5 w-5 mr-2 text-blue-500" />
+                  Av. Principal #123, Ciudad de México
+                </div>
+                <div className="flex items-center text-gray-700">
+                  <Clock className="h-5 w-5 mr-2 text-blue-500" />
+                  Lunes a Viernes: 9am - 6pm
+                </div>
+              </div>
+            </div>
           </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="bg-gray-200 py-4">
+        <div className="container mx-auto px-4 text-center text-gray-600">
+          &copy; 2024 CNG Contracting. Todos los derechos reservados.
         </div>
       </footer>
     </div>

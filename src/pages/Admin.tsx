@@ -1,9 +1,11 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { 
   Calendar, 
   Users, 
@@ -15,13 +17,19 @@ import {
   Plus,
   Edit,
   Trash2,
-  Eye
+  Eye,
+  LogOut,
+  Key,
+  CreditCard,
+  Save
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import AdminZoneMap from "@/components/AdminZoneMap";
 
 interface Zone {
-  id: number;
+  id: string;
   name: string;
   multiplier: number;
   description: string;
@@ -29,7 +37,146 @@ interface Zone {
   coordinates: [number, number][];
 }
 
+interface Service {
+  id: string;
+  name: string;
+  category: string;
+  base_price: number;
+  description: string;
+  duration_minutes: number;
+  is_active: boolean;
+}
+
+interface ApiConfig {
+  id: string;
+  name: string;
+  api_key: string;
+  config_data: any;
+  is_active: boolean;
+}
+
+interface PaymentMethod {
+  id: string;
+  name: string;
+  type: string;
+  config_data: any;
+  is_active: boolean;
+}
+
 const Admin = () => {
+  const { user, profile, signOut } = useAuth();
+  const [zones, setZones] = useState<Zone[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
+  const [apiConfigs, setApiConfigs] = useState<ApiConfig[]>([]);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // New service form
+  const [newService, setNewService] = useState({
+    name: '',
+    category: '',
+    description: '',
+    base_price: '',
+    duration_minutes: ''
+  });
+
+  // API Configuration states
+  const [editingApi, setEditingApi] = useState<string | null>(null);
+  const [apiValues, setApiValues] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    setLoading(true);
+    
+    // Fetch zones
+    const { data: zonesData } = await supabase
+      .from('zones')
+      .select('*')
+      .order('name');
+    
+    // Fetch services
+    const { data: servicesData } = await supabase
+      .from('services')
+      .select('*')
+      .order('name');
+    
+    // Fetch API configs
+    const { data: apiData } = await supabase
+      .from('api_configs')
+      .select('*')
+      .order('name');
+    
+    // Fetch payment methods
+    const { data: paymentData } = await supabase
+      .from('payment_methods')
+      .select('*')
+      .order('name');
+
+    setZones(zonesData || []);
+    setServices(servicesData || []);
+    setApiConfigs(apiData || []);
+    setPaymentMethods(paymentData || []);
+    
+    // Initialize API values
+    const initialApiValues: Record<string, string> = {};
+    apiData?.forEach(api => {
+      initialApiValues[api.id] = api.api_key || '';
+    });
+    setApiValues(initialApiValues);
+    
+    setLoading(false);
+  };
+
+  const handleCreateService = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const { error } = await supabase
+      .from('services')
+      .insert([{
+        name: newService.name,
+        category: newService.category,
+        description: newService.description,
+        base_price: parseFloat(newService.base_price),
+        duration_minutes: parseInt(newService.duration_minutes) || null
+      }]);
+
+    if (error) {
+      toast.error('Error al crear servicio: ' + error.message);
+    } else {
+      toast.success('Servicio creado exitosamente');
+      setNewService({
+        name: '',
+        category: '',
+        description: '',
+        base_price: '',
+        duration_minutes: ''
+      });
+      fetchData();
+    }
+  };
+
+  const handleUpdateApiKey = async (apiId: string, apiKey: string) => {
+    const { error } = await supabase
+      .from('api_configs')
+      .update({ api_key: apiKey })
+      .eq('id', apiId);
+
+    if (error) {
+      toast.error('Error al actualizar API key: ' + error.message);
+    } else {
+      toast.success('API key actualizada exitosamente');
+      setEditingApi(null);
+      fetchData();
+    }
+  };
+
+  const handleZoneUpdate = (updatedZones: Zone[]) => {
+    setZones(updatedZones);
+  };
+
   // Mock data
   const stats = {
     totalBookings: 45,
@@ -71,59 +218,6 @@ const Admin = () => {
     }
   ];
 
-  const services = [
-    {
-      id: 1,
-      name: "Reparación de Plomería",
-      category: "Plomería",
-      basePrice: 89,
-      active: true,
-      bookings: 12
-    },
-    {
-      id: 2,
-      name: "Instalación Eléctrica",
-      category: "Electricidad",
-      basePrice: 95,
-      active: true,
-      bookings: 8
-    },
-    {
-      id: 3,
-      name: "Pintura Interior",
-      category: "Pintura",
-      basePrice: 150,
-      active: true,
-      bookings: 15
-    }
-  ];
-
-  // State for zones management
-  const [zones, setZones] = useState<Zone[]>([
-    { 
-      id: 1, 
-      name: "Zona Centro", 
-      multiplier: 1.0, 
-      color: "#3B82F6", 
-      description: "Área central de la ciudad",
-      coordinates: [[-99.1332, 19.4326], [-99.1300, 19.4350], [-99.1280, 19.4310], [-99.1320, 19.4300]]
-    },
-    { 
-      id: 2, 
-      name: "Zona Norte", 
-      multiplier: 1.15, 
-      color: "#10B981", 
-      description: "Zona norte residencial",
-      coordinates: [[-99.1400, 19.4400], [-99.1350, 19.4450], [-99.1300, 19.4420], [-99.1370, 19.4380]]
-    }
-  ]);
-
-  const [mapboxToken, setMapboxToken] = useState('');
-
-  const handleZoneUpdate = (updatedZones: Zone[]) => {
-    setZones(updatedZones);
-  };
-
   const getStatusBadge = (status: string) => {
     const variants = {
       pending: { variant: "secondary" as const, text: "Pendiente" },
@@ -141,6 +235,17 @@ const Admin = () => {
     );
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-2 text-gray-600">Cargando panel administrativo...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -149,15 +254,14 @@ const Admin = () => {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Panel Administrativo</h1>
-              <p className="text-gray-600">CNG Contracting</p>
+              <p className="text-gray-600">
+                Bienvenido, {profile?.full_name} ({profile?.role})
+              </p>
             </div>
             <div className="flex items-center gap-3">
-              <Button variant="outline" asChild>
-                <Link to="/">Ver Sitio Web</Link>
-              </Button>
-              <Button className="bg-blue-600 hover:bg-blue-700">
-                <Plus className="h-4 w-4 mr-2" />
-                Nueva Reserva
+              <Button onClick={signOut} variant="outline">
+                <LogOut className="h-4 w-4 mr-2" />
+                Cerrar Sesión
               </Button>
             </div>
           </div>
@@ -165,175 +269,250 @@ const Admin = () => {
       </header>
 
       <div className="px-6 py-6">
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Reservas</CardTitle>
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalBookings}</div>
-              <p className="text-xs text-muted-foreground">+12% desde el mes pasado</p>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Ingresos Totales</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">${stats.totalRevenue.toLocaleString()}</div>
-              <p className="text-xs text-muted-foreground">+18% desde el mes pasado</p>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Clientes Activos</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.activeCustomers}</div>
-              <p className="text-xs text-muted-foreground">+5% desde el mes pasado</p>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Servicios Completados</CardTitle>
-              <Wrench className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.completedServices}</div>
-              <p className="text-xs text-muted-foreground">+22% desde el mes pasado</p>
-            </CardContent>
-          </Card>
-        </div>
-
         {/* Main Content */}
-        <Tabs defaultValue="bookings" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="bookings">Reservas</TabsTrigger>
+        <Tabs defaultValue="services" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="services">Servicios</TabsTrigger>
             <TabsTrigger value="zones">Zonas</TabsTrigger>
+            <TabsTrigger value="apis">APIs</TabsTrigger>
+            <TabsTrigger value="payments">Pagos</TabsTrigger>
             <TabsTrigger value="analytics">Análisis</TabsTrigger>
           </TabsList>
 
-          {/* Bookings Tab */}
-          <TabsContent value="bookings" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle>Reservas Recientes</CardTitle>
-                    <CardDescription>Gestiona las reservas de servicios</CardDescription>
-                  </div>
-                  <Button className="bg-blue-600 hover:bg-blue-700">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Nueva Reserva
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {recentBookings.map((booking) => (
-                    <div key={booking.id} className="flex items-center justify-between p-4 border rounded-lg">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-4 mb-2">
-                          <h4 className="font-semibold">{booking.customer}</h4>
-                          {getStatusBadge(booking.status)}
-                        </div>
-                        <p className="text-sm text-gray-600 mb-1">{booking.service}</p>
-                        <div className="flex items-center gap-4 text-sm text-gray-500">
-                          <span className="flex items-center gap-1">
-                            <Calendar className="h-3 w-3" />
-                            {booking.date} - {booking.time}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <MapPin className="h-3 w-3" />
-                            {booking.zone}
-                          </span>
-                          <span className="font-medium text-green-600">
-                            ${booking.price}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button size="sm" variant="outline">
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button size="sm" variant="outline">
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button size="sm" variant="outline">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
           {/* Services Tab */}
           <TabsContent value="services" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle>Gestión de Servicios</CardTitle>
-                    <CardDescription>Administra los servicios disponibles</CardDescription>
-                  </div>
-                  <Button className="bg-blue-600 hover:bg-blue-700">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Nuevo Servicio
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {services.map((service) => (
-                    <div key={service.id} className="flex items-center justify-between p-4 border rounded-lg">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-4 mb-2">
-                          <h4 className="font-semibold">{service.name}</h4>
-                          <Badge variant="secondary">{service.category}</Badge>
-                          {service.active && (
-                            <Badge variant="outline" className="text-green-600 border-green-600">
-                              Activo
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-4 text-sm text-gray-500">
-                          <span>Precio base: ${service.basePrice}</span>
-                          <span>{service.bookings} reservas</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button size="sm" variant="outline">
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button size="sm" variant="outline">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+            <div className="grid md:grid-cols-2 gap-6">
+              {/* Create Service */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Crear Nuevo Servicio</CardTitle>
+                  <CardDescription>Agrega servicios desde el panel</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleCreateService} className="space-y-4">
+                    <div>
+                      <Label htmlFor="serviceName">Nombre del Servicio</Label>
+                      <Input
+                        id="serviceName"
+                        value={newService.name}
+                        onChange={(e) => setNewService({...newService, name: e.target.value})}
+                        placeholder="Reparación de Plomería"
+                        required
+                      />
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                    
+                    <div>
+                      <Label htmlFor="serviceCategory">Categoría</Label>
+                      <Input
+                        id="serviceCategory"
+                        value={newService.category}
+                        onChange={(e) => setNewService({...newService, category: e.target.value})}
+                        placeholder="Plomería"
+                        required
+                      />
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="serviceDescription">Descripción</Label>
+                      <Textarea
+                        id="serviceDescription"
+                        value={newService.description}
+                        onChange={(e) => setNewService({...newService, description: e.target.value})}
+                        placeholder="Descripción del servicio..."
+                      />
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="servicePrice">Precio Base ($)</Label>
+                      <Input
+                        id="servicePrice"
+                        type="number"
+                        step="0.01"
+                        value={newService.base_price}
+                        onChange={(e) => setNewService({...newService, base_price: e.target.value})}
+                        placeholder="89.99"
+                        required
+                      />
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="serviceDuration">Duración (minutos)</Label>
+                      <Input
+                        id="serviceDuration"
+                        type="number"
+                        value={newService.duration_minutes}
+                        onChange={(e) => setNewService({...newService, duration_minutes: e.target.value})}
+                        placeholder="120"
+                      />
+                    </div>
+                    
+                    <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Crear Servicio
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+
+              {/* Services List */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Servicios Existentes</CardTitle>
+                  <CardDescription>Gestiona los servicios disponibles</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3 max-h-96 overflow-y-auto">
+                    {services.map((service) => (
+                      <div key={service.id} className="border rounded-lg p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="font-semibold">{service.name}</h4>
+                          <Badge variant={service.is_active ? "default" : "secondary"}>
+                            {service.is_active ? "Activo" : "Inactivo"}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-gray-600 mb-2">{service.description}</p>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-green-600 font-medium">${service.base_price}</span>
+                          <span className="text-gray-500">{service.category}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
 
-          {/* Zones Tab - Now with Interactive Map */}
+          {/* Zones Tab */}
           <TabsContent value="zones" className="space-y-6">
             <AdminZoneMap 
               zones={zones}
               onZoneUpdate={handleZoneUpdate}
-              mapboxToken={mapboxToken}
             />
+          </TabsContent>
+
+          {/* APIs Tab */}
+          <TabsContent value="apis" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Key className="h-5 w-5" />
+                  Configuración de APIs
+                </CardTitle>
+                <CardDescription>
+                  Gestiona las claves de API para servicios externos
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {apiConfigs.map((api) => (
+                    <div key={api.id} className="border rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <h4 className="font-semibold capitalize">{api.name}</h4>
+                          <p className="text-sm text-gray-600">
+                            {api.config_data?.description || `Configuración para ${api.name}`}
+                          </p>
+                        </div>
+                        <Badge variant={api.is_active ? "default" : "secondary"}>
+                          {api.is_active ? "Activo" : "Inactivo"}
+                        </Badge>
+                      </div>
+                      
+                      <div className="flex gap-2">
+                        {editingApi === api.id ? (
+                          <>
+                            <Input
+                              type="password"
+                              value={apiValues[api.id] || ''}
+                              onChange={(e) => setApiValues({
+                                ...apiValues,
+                                [api.id]: e.target.value
+                              })}
+                              placeholder="Pegar API key aquí..."
+                              className="flex-1"
+                            />
+                            <Button 
+                              onClick={() => handleUpdateApiKey(api.id, apiValues[api.id])}
+                              size="sm"
+                              className="bg-green-600 hover:bg-green-700"
+                            >
+                              <Save className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              onClick={() => setEditingApi(null)}
+                              variant="outline"
+                              size="sm"
+                            >
+                              Cancelar
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            <Input
+                              type="password"
+                              value={api.api_key ? '••••••••••••••••' : ''}
+                              placeholder="API key no configurada"
+                              className="flex-1"
+                              disabled
+                            />
+                            <Button 
+                              onClick={() => setEditingApi(api.id)}
+                              variant="outline"
+                              size="sm"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                      
+                      {api.name === 'mapbox' && (
+                        <p className="text-xs text-blue-600 mt-2">
+                          💡 Obtén tu token en <a href="https://mapbox.com/" target="_blank" rel="noopener noreferrer" className="underline">mapbox.com</a>
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Payment Methods Tab */}
+          <TabsContent value="payments" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <CreditCard className="h-5 w-5" />
+                  Métodos de Pago
+                </CardTitle>
+                <CardDescription>
+                  Configura los métodos de pago disponibles
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid md:grid-cols-2 gap-4">
+                  {paymentMethods.map((method) => (
+                    <div key={method.id} className="border rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-semibold">{method.name}</h4>
+                        <Badge variant={method.is_active ? "default" : "secondary"}>
+                          {method.is_active ? "Activo" : "Inactivo"}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-gray-600 mb-3">
+                        Tipo: {method.type}
+                      </p>
+                      <Button variant="outline" size="sm">
+                        <Settings className="h-4 w-4 mr-2" />
+                        Configurar
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* Analytics Tab */}
@@ -369,7 +548,8 @@ const Admin = () => {
                           <span className="text-sm font-medium text-gray-500">#{index + 1}</span>
                           <span className="font-medium">{service.name}</span>
                         </div>
-                        <span className="text-sm text-gray-600">{service.bookings} reservas</span>
+                        {/* Assuming you have a bookings count in your service object */}
+                        {/* <span className="text-sm text-gray-600">{service.bookings} reservas</span> */}
                       </div>
                     ))}
                   </div>
@@ -401,6 +581,7 @@ const Admin = () => {
                               backgroundColor: zone.color 
                             }}
                           ></div>
+                        {/* Assuming you have a booking count or some metric to display */}
                         </div>
                         <span className="text-sm text-gray-600">{zone.multiplier}x</span>
                       </div>
