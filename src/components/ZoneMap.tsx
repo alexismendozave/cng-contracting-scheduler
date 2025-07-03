@@ -216,7 +216,7 @@ const ZoneMap: React.FC<ZoneMapProps> = ({
               id="mapbox-token"
               type="text"
               placeholder="pk.eyJ1IjoiZXhhbXBsZSIsImEiOiJjbGV4YW1wbGUifQ..."
-              value={mapboxToken}
+            value="sk.eyJ1IjoiYWxleGlzbWVuZG96YXZlIiwiYSI6ImNtY21vNHhyZzBuMXYycnB0dTJiZDMxMDgifQ.qNETDGvdbBLziszZrYfWEw"
               onChange={(e) => setMapboxToken(e.target.value)}
             />
             <p className="text-sm text-gray-600 mt-2">
