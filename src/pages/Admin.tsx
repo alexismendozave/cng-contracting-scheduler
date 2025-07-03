@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -6,12 +5,13 @@ import { LogOut } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import AdminZoneMap from "@/components/AdminZoneMap";
+import EnhancedZoneMap from "@/components/admin/EnhancedZoneMap";
 import ServiceCreationForm from "@/components/admin/ServiceCreationForm";
 import ServiceZonePricing from "@/components/admin/ServiceZonePricing";
 import ApiConfiguration from "@/components/admin/ApiConfiguration";
 import PaymentMethods from "@/components/admin/PaymentMethods";
 import Analytics from "@/components/admin/Analytics";
+import GeneralSettings from "@/components/admin/GeneralSettings";
 import { Zone, Service, ServiceZonePrice, ApiConfig, PaymentMethod } from "@/components/admin/types";
 
 const Admin = () => {
@@ -113,9 +113,10 @@ const Admin = () => {
 
       <div className="px-6 py-6">
         <Tabs defaultValue="services" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="services">Servicios</TabsTrigger>
             <TabsTrigger value="zones">Zonas</TabsTrigger>
+            <TabsTrigger value="settings">Configuración</TabsTrigger>
             <TabsTrigger value="apis">APIs</TabsTrigger>
             <TabsTrigger value="payments">Pagos</TabsTrigger>
             <TabsTrigger value="analytics">Análisis</TabsTrigger>
@@ -136,10 +137,15 @@ const Admin = () => {
 
           {/* Zones Tab */}
           <TabsContent value="zones" className="space-y-6">
-            <AdminZoneMap 
+            <EnhancedZoneMap 
               zones={zones}
               onZoneUpdate={handleZoneUpdate}
             />
+          </TabsContent>
+
+          {/* General Settings Tab */}
+          <TabsContent value="settings" className="space-y-6">
+            <GeneralSettings />
           </TabsContent>
 
           {/* APIs Tab */}

@@ -117,6 +117,30 @@ export type Database = {
           },
         ]
       }
+      general_settings: {
+        Row: {
+          created_at: string
+          id: string
+          setting_key: string
+          setting_value: Json | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          setting_key: string
+          setting_value?: Json | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          setting_key?: string
+          setting_value?: Json | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       payment_methods: {
         Row: {
           client_id: string | null
@@ -281,6 +305,8 @@ export type Database = {
       }
       zones: {
         Row: {
+          center_lat: number | null
+          center_lng: number | null
           color: string | null
           coordinates: Json | null
           created_at: string | null
@@ -291,9 +317,13 @@ export type Database = {
           multiplier: number | null
           name: string
           pricing_type: string | null
+          radius_meters: number | null
           updated_at: string | null
+          zone_type: string | null
         }
         Insert: {
+          center_lat?: number | null
+          center_lng?: number | null
           color?: string | null
           coordinates?: Json | null
           created_at?: string | null
@@ -304,9 +334,13 @@ export type Database = {
           multiplier?: number | null
           name: string
           pricing_type?: string | null
+          radius_meters?: number | null
           updated_at?: string | null
+          zone_type?: string | null
         }
         Update: {
+          center_lat?: number | null
+          center_lng?: number | null
           color?: string | null
           coordinates?: Json | null
           created_at?: string | null
@@ -317,7 +351,9 @@ export type Database = {
           multiplier?: number | null
           name?: string
           pricing_type?: string | null
+          radius_meters?: number | null
           updated_at?: string | null
+          zone_type?: string | null
         }
         Relationships: []
       }
