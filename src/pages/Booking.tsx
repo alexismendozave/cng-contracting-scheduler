@@ -1,529 +1,375 @@
 
+import { useParams, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { useParams, Link } from "react-router-dom";
-import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar, MapPin, Clock, CreditCard, ArrowLeft, User, Mail, Phone, CheckCircle } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { CalendarIcon, ArrowLeft } from "lucide-react";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
+import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+
+interface Service {
+  id: string;
+  name: string;
+  description: string;
+  base_price: number;
+  category: string;
+  duration_minutes: number;
+  deposit_type: string;
+  deposit_amount: number;
+}
+
+interface Zone {
+  id: string;
+  name: string;
+  multiplier: number;
+  fixed_price: number;
+  pricing_type: string;
+}
 
 const Booking = () => {
   const { serviceId } = useParams();
-  const { toast } = useToast();
-  const [step, setStep] = useState(1); // 1: Service, 2: Details, 3: Zone, 4: DateTime, 5: Payment
-  const [bookingData, setBookingData] = useState({
-    service: null,
-    selectedZone: null,
-    finalPrice: 0,
-    priceExplanation: "",
-    date: "",
-    time: "",
-    customerInfo: {
-      name: "",
-      email: "",
-      phone: "",
-    },
-    address: {
-      street: "",
-      city: "",
-      province: "",
-      postalCode: "",
-      notes: "",
-    },
+  const navigate = useNavigate();
+  const [service, setService] = useState<Service | null>(null);
+  const [zones, setZones] = useState<Zone[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+
+  const [formData, setFormData] = useState({
+    customer_name: '',
+    customer_email: '',
+    customer_phone: '',
+    address: '',
+    notes: '',
+    zone_id: '',
+    scheduled_date: null as Date | null,
+    scheduled_time: '',
+    requires_call: false
   });
 
-  // Mock services data (vendría de WooCommerce API)
-  const services = [
-    {
-      id: 1,
-      woocommerce_id: 123,
-      name: "Reparación de Plomería",
-      category: "plumbing",
-      description: "Reparación de fugas, instalación de grifos, destapado de tuberías",
-      basePrice: 89,
-      duration: "1-2 horas",
-      detailedDescription: "Nuestro servicio de plomería incluye diagnóstico completo, reparación de fugas, instalación y reemplazo de grifos, destapado profesional de tuberías, y garantía de 30 días en todos los trabajos.",
-      inclusions: ["Diagnóstico gratuito", "Materiales básicos incluidos", "Garantía 30 días", "Limpieza del área de trabajo"]
-    },
-    // ... otros servicios
-  ];
-
-  // Mock zones data (vendría de la base de datos)
-  const zones = [
-    { 
-      id: 1, 
-      name: "Zona Centro", 
-      multiplier: 1.0, 
-      description: "Área metropolitana central - Sin recargo" 
-    },
-    { 
-      id: 2, 
-      name: "Zona Norte", 
-      multiplier: 1.15, 
-      description: "Área norte de la ciudad - 15% recargo por distancia" 
-    },
-    { 
-      id: 3, 
-      name: "Zona Sur", 
-      multiplier: 1.1, 
-      description: "Área sur de la ciudad - 10% recargo por distancia" 
-    },
-    { 
-      id: 4, 
-      name: "Zona Este", 
-      multiplier: 1.2, 
-      description: "Área este de la ciudad - 20% recargo por distancia y tráfico" 
-    },
-    { 
-      id: 5, 
-      name: "Zona Oeste", 
-      multiplier: 1.25, 
-      description: "Área oeste de la ciudad - 25% recargo por distancia extendida" 
-    },
-  ];
-
-  // Available time slots
-  const timeSlots = [
-    "08:00", "09:00", "10:00", "11:00", "12:00", 
-    "13:00", "14:00", "15:00", "16:00", "17:00"
-  ];
-
   useEffect(() => {
-    const service = services.find(s => s.id === parseInt(serviceId));
-    if (service) {
-      setBookingData(prev => ({
-        ...prev,
-        service,
-        finalPrice: service.basePrice
-      }));
+    if (serviceId) {
+      fetchServiceAndZones();
     }
   }, [serviceId]);
 
-  const handleZoneSelection = (zoneId) => {
-    const zone = zones.find(z => z.id === parseInt(zoneId));
-    const newPrice = Math.round(bookingData.service.basePrice * zone.multiplier);
-    const priceDifference = newPrice - bookingData.service.basePrice;
-    
-    let explanation = "";
-    if (priceDifference > 0) {
-      explanation = `Precio ajustado por ${zone.name}: +$${priceDifference} (${zone.description})`;
+  const fetchServiceAndZones = async () => {
+    setLoading(true);
+    try {
+      // Fetch service
+      const { data: serviceData, error: serviceError } = await supabase
+        .from('services')
+        .select('*')
+        .eq('id', serviceId)
+        .eq('is_active', true)
+        .single();
+
+      if (serviceError) {
+        console.error('Service error:', serviceError);
+        toast.error('Servicio no encontrado');
+        navigate('/');
+        return;
+      }
+
+      setService(serviceData);
+
+      // Fetch zones
+      const { data: zonesData, error: zonesError } = await supabase
+        .from('zones')
+        .select('*')
+        .eq('is_active', true)
+        .order('name');
+
+      if (zonesError) {
+        console.error('Zones error:', zonesError);
+      } else {
+        setZones(zonesData || []);
+      }
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      toast.error('Error al cargar los datos');
+      navigate('/');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const calculateFinalPrice = () => {
+    if (!service || !formData.zone_id) return service?.base_price || 0;
+
+    const selectedZone = zones.find(z => z.id === formData.zone_id);
+    if (!selectedZone) return service.base_price;
+
+    if (selectedZone.pricing_type === 'fixed') {
+      return service.base_price + (selectedZone.fixed_price || 0);
     } else {
-      explanation = `Precio base para ${zone.name} - ${zone.description}`;
-    }
-
-    setBookingData(prev => ({
-      ...prev,
-      selectedZone: zone,
-      finalPrice: newPrice,
-      priceExplanation: explanation
-    }));
-  };
-
-  const handleNext = () => {
-    if (step < 5) {
-      setStep(step + 1);
+      return service.base_price * (selectedZone.multiplier || 1);
     }
   };
 
-  const handleBack = () => {
-    if (step > 1) {
-      setStep(step - 1);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+
+    try {
+      const bookingData = {
+        service_id: serviceId,
+        customer_name: formData.customer_name,
+        customer_email: formData.customer_email,
+        customer_phone: formData.customer_phone,
+        address: formData.address,
+        notes: formData.notes,
+        zone_id: formData.zone_id,
+        scheduled_date: formData.scheduled_date?.toISOString().split('T')[0],
+        scheduled_time: formData.scheduled_time,
+        requires_call: formData.requires_call,
+        total_amount: calculateFinalPrice(),
+        status: 'pending'
+      };
+
+      const { error } = await supabase
+        .from('bookings')
+        .insert([bookingData]);
+
+      if (error) throw error;
+
+      toast.success('Reserva creada exitosamente');
+      navigate('/thanks');
+    } catch (error) {
+      console.error('Error creating booking:', error);
+      toast.error('Error al crear la reserva');
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  const handleStripePayment = () => {
-    // Integración con WooCommerce y Stripe
-    const stripeUrl = `https://tu-wordpress.com/checkout/?add-to-cart=${bookingData.service.woocommerce_id}&zone=${bookingData.selectedZone?.id}&date=${bookingData.date}&time=${bookingData.time}&customer_data=${encodeURIComponent(JSON.stringify(bookingData.customerInfo))}`;
-    
-    // Abrir Stripe en nueva pestaña
-    window.open(stripeUrl, '_blank');
-    
-    toast({
-      title: "Redirigiendo a pago...",
-      description: "Te hemos redirigido a la página de pago seguro.",
-    });
-  };
-
-  if (!bookingData.service) {
-    return <div className="min-h-screen flex items-center justify-center">Cargando...</div>;
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-2 text-gray-600">Cargando servicio...</p>
+        </div>
+      </div>
+    );
   }
 
-  const stepTitles = {
-    1: "Servicio Seleccionado",
-    2: "Detalles del Servicio",
-    3: "Selecciona tu Zona",
-    4: "Fecha y Hora",
-    5: "Datos y Pago"
-  };
+  if (!service) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Servicio no encontrado</h1>
+          <p className="text-gray-600 mb-4">El servicio que buscas no existe o no está disponible.</p>
+          <Button onClick={() => navigate('/')}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Volver al inicio
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <Link to="/" className="flex items-center space-x-2 text-blue-600 hover:text-blue-700">
-              <ArrowLeft className="h-5 w-5" />
-              <span>Volver a servicios</span>
-            </Link>
-            <h1 className="text-2xl font-bold text-gray-900">CNG Contracting</h1>
-            <div className="w-24"></div>
-          </div>
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-2xl mx-auto px-4">
+        <div className="mb-6">
+          <Button variant="ghost" onClick={() => navigate('/')}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Volver
+          </Button>
         </div>
-      </header>
 
-      <div className="container mx-auto px-4 py-8">
-        <div className="max-w-4xl mx-auto">
-          {/* Progress Steps */}
-          <div className="flex items-center justify-between mb-8">
-            {[1, 2, 3, 4, 5].map((stepNum) => (
-              <div key={stepNum} className="flex items-center">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                  step >= stepNum ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-600"
-                }`}>
-                  {step > stepNum ? <CheckCircle className="h-4 w-4" /> : stepNum}
-                </div>
-                {stepNum < 5 && (
-                  <div className={`w-16 h-1 mx-2 ${
-                    step > stepNum ? "bg-blue-600" : "bg-gray-200"
-                  }`} />
-                )}
-              </div>
-            ))}
-          </div>
-
-          <div className="grid lg:grid-cols-3 gap-8">
-            {/* Main Content */}
-            <div className="lg:col-span-2">
-              {/* Step 1: Service Selected */}
-              {step === 1 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Paso 1: {stepTitles[1]}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    <div>
-                      <h3 className="text-xl font-semibold mb-2">{bookingData.service.name}</h3>
-                      <p className="text-gray-600 mb-4">{bookingData.service.description}</p>
-                      <div className="flex items-center gap-4">
-                        <span className="flex items-center text-sm text-gray-600">
-                          <Clock className="h-4 w-4 mr-1" />
-                          {bookingData.service.duration}
-                        </span>
-                        <span className="text-2xl font-bold text-blue-600">
-                          Desde ${bookingData.service.basePrice}
-                        </span>
-                      </div>
-                    </div>
-                    
-                    <Button onClick={handleNext} className="w-full bg-blue-600 hover:bg-blue-700">
-                      Continuar con este servicio
-                    </Button>
-                  </CardContent>
-                </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Reservar: {service.name}</CardTitle>
+            <CardDescription>
+              {service.description}
+            </CardDescription>
+            <div className="flex items-center gap-4 mt-2">
+              <span className="text-2xl font-bold text-green-600">${service.base_price}</span>
+              {service.duration_minutes && (
+                <span className="text-gray-500">{service.duration_minutes} minutos</span>
               )}
-
-              {/* Step 2: Service Details */}
-              {step === 2 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Paso 2: {stepTitles[2]}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    <div>
-                      <h3 className="text-xl font-semibold mb-4">{bookingData.service.name}</h3>
-                      <p className="text-gray-700 mb-4">{bookingData.service.detailedDescription}</p>
-                      
-                      <h4 className="font-semibold mb-2">Incluye:</h4>
-                      <ul className="list-disc list-inside space-y-1 text-gray-600 mb-4">
-                        {bookingData.service.inclusions?.map((item, index) => (
-                          <li key={index}>{item}</li>
-                        ))}
-                      </ul>
-                    </div>
-                    
-                    <div>
-                      <Label htmlFor="notes">Notas adicionales (opcional)</Label>
-                      <Textarea 
-                        id="notes"
-                        placeholder="Describe detalles específicos del trabajo que necesitas..."
-                        className="mt-1"
-                      />
-                    </div>
-
-                    <div className="flex gap-3">
-                      <Button variant="outline" onClick={handleBack} className="flex-1">
-                        Atrás
-                      </Button>
-                      <Button onClick={handleNext} className="flex-1 bg-blue-600 hover:bg-blue-700">
-                        Continuar
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Step 3: Zone Selection */}
-              {step === 3 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Paso 3: {stepTitles[3]}</CardTitle>
-                    <CardDescription>
-                      El precio puede variar según tu ubicación
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    <div className="grid gap-3">
-                      {zones.map((zone) => (
-                        <div
-                          key={zone.id}
-                          className={`p-4 border rounded-lg cursor-pointer transition-all ${
-                            bookingData.selectedZone?.id === zone.id 
-                              ? "border-blue-500 bg-blue-50" 
-                              : "border-gray-200 hover:border-gray-300"
-                          }`}
-                          onClick={() => handleZoneSelection(zone.id)}
-                        >
-                          <div className="flex justify-between items-center mb-2">
-                            <h4 className="font-semibold">{zone.name}</h4>
-                            <span className="text-lg font-bold text-blue-600">
-                              ${Math.round(bookingData.service.basePrice * zone.multiplier)}
-                            </span>
-                          </div>
-                          <p className="text-sm text-gray-600">{zone.description}</p>
-                          {zone.multiplier !== 1.0 && (
-                            <span className="text-xs text-orange-600">
-                              +${Math.round(bookingData.service.basePrice * zone.multiplier) - bookingData.service.basePrice} sobre precio base
-                            </span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-
-                    {bookingData.priceExplanation && (
-                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                        <p className="text-sm text-blue-800">
-                          <strong>Explicación del precio:</strong> {bookingData.priceExplanation}
-                        </p>
-                      </div>
-                    )}
-
-                    <div className="flex gap-3">
-                      <Button variant="outline" onClick={handleBack} className="flex-1">
-                        Atrás
-                      </Button>
-                      <Button 
-                        onClick={handleNext} 
-                        className="flex-1 bg-blue-600 hover:bg-blue-700"
-                        disabled={!bookingData.selectedZone}
-                      >
-                        Continuar
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Step 4: Date & Time */}
-              {step === 4 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Paso 4: {stepTitles[4]}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    <div>
-                      <Label htmlFor="date">Fecha preferida</Label>
-                      <Input 
-                        id="date"
-                        type="date"
-                        value={bookingData.date}
-                        onChange={(e) => setBookingData(prev => ({...prev, date: e.target.value}))}
-                        min={new Date().toISOString().split('T')[0]}
-                        className="mt-1"
-                      />
-                    </div>
-
-                    <div>
-                      <Label>Hora preferida</Label>
-                      <Select onValueChange={(value) => setBookingData(prev => ({...prev, time: value}))}>
-                        <SelectTrigger className="mt-1">
-                          <SelectValue placeholder="Selecciona una hora" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {timeSlots.map((time) => (
-                            <SelectItem key={time} value={time}>
-                              {time}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="flex gap-3">
-                      <Button variant="outline" onClick={handleBack} className="flex-1">
-                        Atrás
-                      </Button>
-                      <Button 
-                        onClick={handleNext} 
-                        className="flex-1 bg-blue-600 hover:bg-blue-700"
-                        disabled={!bookingData.date || !bookingData.time}
-                      >
-                        Continuar
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Step 5: Customer Info & Payment */}
-              {step === 5 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Paso 5: {stepTitles[5]}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    <div className="grid md:grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="name">Nombre completo</Label>
-                        <Input 
-                          id="name"
-                          value={bookingData.customerInfo.name}
-                          onChange={(e) => setBookingData(prev => ({
-                            ...prev, 
-                            customerInfo: {...prev.customerInfo, name: e.target.value}
-                          }))}
-                          className="mt-1"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="email">Email</Label>
-                        <Input 
-                          id="email"
-                          type="email"
-                          value={bookingData.customerInfo.email}
-                          onChange={(e) => setBookingData(prev => ({
-                            ...prev, 
-                            customerInfo: {...prev.customerInfo, email: e.target.value}
-                          }))}
-                          className="mt-1"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <Label htmlFor="phone">Teléfono</Label>
-                      <Input 
-                        id="phone"
-                        value={bookingData.customerInfo.phone}
-                        onChange={(e) => setBookingData(prev => ({
-                          ...prev, 
-                          customerInfo: {...prev.customerInfo, phone: e.target.value}
-                        }))}
-                        className="mt-1"
-                      />
-                    </div>
-
-                    <div>
-                      <Label htmlFor="street">Dirección completa</Label>
-                      <Input 
-                        id="street"
-                        value={bookingData.address.street}
-                        onChange={(e) => setBookingData(prev => ({
-                          ...prev, 
-                          address: {...prev.address, street: e.target.value}
-                        }))}
-                        placeholder="123 Main Street, Ciudad, Provincia, Código Postal"
-                        className="mt-1"
-                      />
-                    </div>
-
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <h4 className="font-semibold mb-2">Resumen de la reserva</h4>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span>Servicio:</span>
-                          <span>{bookingData.service.name}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Zona:</span>
-                          <span>{bookingData.selectedZone?.name}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Fecha:</span>
-                          <span>{bookingData.date} a las {bookingData.time}</span>
-                        </div>
-                        <div className="flex justify-between font-semibold text-lg border-t pt-2">
-                          <span>Total:</span>
-                          <span>${bookingData.finalPrice}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex gap-3">
-                      <Button variant="outline" onClick={handleBack} className="flex-1">
-                        Atrás
-                      </Button>
-                      <Button 
-                        onClick={handleStripePayment} 
-                        className="flex-1 bg-green-600 hover:bg-green-700"
-                        disabled={!bookingData.customerInfo.name || !bookingData.customerInfo.email || !bookingData.address.street}
-                      >
-                        <CreditCard className="h-4 w-4 mr-2" />
-                        Pagar con Tarjeta
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
+              {service.category && (
+                <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-sm">{service.category}</span>
               )}
             </div>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="customer_name">Nombre completo *</Label>
+                  <Input
+                    id="customer_name"
+                    value={formData.customer_name}
+                    onChange={(e) => setFormData({...formData, customer_name: e.target.value})}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="customer_email">Email *</Label>
+                  <Input
+                    id="customer_email"
+                    type="email"
+                    value={formData.customer_email}
+                    onChange={(e) => setFormData({...formData, customer_email: e.target.value})}
+                    required
+                  />
+                </div>
+              </div>
 
-            {/* Sidebar */}
-            <div className="lg:col-span-1">
-              <Card className="sticky top-4">
-                <CardHeader>
-                  <CardTitle className="text-lg">Resumen</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div>
-                      <h4 className="font-medium">{bookingData.service.name}</h4>
-                      <p className="text-sm text-gray-600">{bookingData.service.duration}</p>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="customer_phone">Teléfono</Label>
+                  <Input
+                    id="customer_phone"
+                    type="tel"
+                    value={formData.customer_phone}
+                    onChange={(e) => setFormData({...formData, customer_phone: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="zone">Zona de servicio *</Label>
+                  <Select value={formData.zone_id} onValueChange={(value) => setFormData({...formData, zone_id: value})}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecciona una zona" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {zones.map(zone => (
+                        <SelectItem key={zone.id} value={zone.id}>
+                          {zone.name} - {zone.pricing_type === 'fixed' 
+                            ? `+$${zone.fixed_price}` 
+                            : `${zone.multiplier}x`
+                          }
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="address">Dirección completa *</Label>
+                <Textarea
+                  id="address"
+                  value={formData.address}
+                  onChange={(e) => setFormData({...formData, address: e.target.value})}
+                  placeholder="Calle, número, colonia, ciudad..."
+                  required
+                />
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <Label>Fecha preferida</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !formData.scheduled_date && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {formData.scheduled_date ? (
+                          format(formData.scheduled_date, "PPP", { locale: es })
+                        ) : (
+                          <span>Seleccionar fecha</span>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar
+                        mode="single"
+                        selected={formData.scheduled_date || undefined}
+                        onSelect={(date) => setFormData({...formData, scheduled_date: date || null})}
+                        disabled={(date) => date < new Date()}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div>
+                  <Label htmlFor="scheduled_time">Hora preferida</Label>
+                  <Input
+                    id="scheduled_time"
+                    type="time"
+                    value={formData.scheduled_time}
+                    onChange={(e) => setFormData({...formData, scheduled_time: e.target.value})}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="notes">Notas adicionales</Label>
+                <Textarea
+                  id="notes"
+                  value={formData.notes}
+                  onChange={(e) => setFormData({...formData, notes: e.target.value})}
+                  placeholder="Detalles específicos, instrucciones especiales..."
+                  rows={3}
+                />
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="requires_call"
+                  checked={formData.requires_call}
+                  onCheckedChange={(checked) => setFormData({...formData, requires_call: !!checked})}
+                />
+                <Label htmlFor="requires_call" className="text-sm">
+                  Prefiero que me llamen para confirmar los detalles
+                </Label>
+              </div>
+
+              {formData.zone_id && (
+                <div className="p-4 bg-blue-50 rounded-lg">
+                  <h4 className="font-medium mb-2">Resumen del precio:</h4>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span>Precio base:</span>
+                      <span>${service.base_price}</span>
                     </div>
-                    
-                    {bookingData.selectedZone && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <MapPin className="h-4 w-4 text-gray-500" />
-                        <span>{bookingData.selectedZone.name}</span>
+                    {zones.find(z => z.id === formData.zone_id) && (
+                      <div className="flex justify-between">
+                        <span>Zona {zones.find(z => z.id === formData.zone_id)?.name}:</span>
+                        <span>
+                          {zones.find(z => z.id === formData.zone_id)?.pricing_type === 'fixed' 
+                            ? `+$${zones.find(z => z.id === formData.zone_id)?.fixed_price}`
+                            : `x${zones.find(z => z.id === formData.zone_id)?.multiplier}`
+                          }
+                        </span>
                       </div>
                     )}
-                    
-                    {bookingData.date && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <Calendar className="h-4 w-4 text-gray-500" />
-                        <span>{bookingData.date} - {bookingData.time}</span>
-                      </div>
-                    )}
-
-                    <div className="border-t pt-4">
-                      <div className="flex justify-between text-lg font-semibold">
-                        <span>Total:</span>
-                        <span className="text-blue-600">${bookingData.finalPrice}</span>
-                      </div>
-                      {bookingData.priceExplanation && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          {bookingData.priceExplanation}
-                        </p>
-                      )}
+                    <div className="flex justify-between font-bold text-lg border-t pt-2">
+                      <span>Total:</span>
+                      <span className="text-green-600">${calculateFinalPrice()}</span>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-        </div>
+                </div>
+              )}
+
+              <Button 
+                type="submit" 
+                className="w-full" 
+                disabled={submitting}
+              >
+                {submitting ? 'Procesando...' : 'Confirmar Reserva'}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

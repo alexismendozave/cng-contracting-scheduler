@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -6,7 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import EnhancedZoneMap from "@/components/admin/EnhancedZoneMap";
-import ServiceCreationForm from "@/components/admin/ServiceCreationForm";
+import ServiceManagement from "@/components/admin/ServiceManagement";
 import ServiceZonePricing from "@/components/admin/ServiceZonePricing";
 import ApiConfiguration from "@/components/admin/ApiConfiguration";
 import PaymentMethods from "@/components/admin/PaymentMethods";
@@ -125,7 +126,11 @@ const Admin = () => {
           {/* Services Tab */}
           <TabsContent value="services" className="space-y-6">
             <div className="grid gap-6">
-              <ServiceCreationForm onServiceCreated={fetchData} />
+              <ServiceManagement 
+                services={services}
+                zones={zones}
+                onDataRefresh={fetchData}
+              />
               <ServiceZonePricing 
                 services={services}
                 zones={zones}

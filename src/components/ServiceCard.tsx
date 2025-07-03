@@ -7,14 +7,13 @@ import { Link } from "react-router-dom";
 
 interface ServiceCardProps {
   service: {
-    id: number;
+    id: string;
     name: string;
     description: string;
-    basePrice: number;
-    duration: string;
-    isPackage: boolean;
-    rating: number;
-    reviews: number;
+    base_price: number;
+    duration_minutes: number | null;
+    category: string | null;
+    is_active: boolean;
   };
 }
 
@@ -24,18 +23,18 @@ const ServiceCard = ({ service }: ServiceCardProps) => {
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg">{service.name}</CardTitle>
-          {service.isPackage && (
+          {service.category && (
             <Badge variant="secondary" className="bg-purple-100 text-purple-800">
-              Paquete
+              {service.category}
             </Badge>
           )}
         </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center">
             <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-            <span className="text-sm font-medium ml-1">{service.rating}</span>
+            <span className="text-sm font-medium ml-1">4.8</span>
           </div>
-          <span className="text-sm text-gray-500">({service.reviews} reseñas)</span>
+          <span className="text-sm text-gray-500">(124 reseñas)</span>
         </div>
       </CardHeader>
       <CardContent>
@@ -45,12 +44,12 @@ const ServiceCard = ({ service }: ServiceCardProps) => {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center text-sm text-gray-600">
             <Clock className="h-4 w-4 mr-1" />
-            {service.duration}
+            {service.duration_minutes ? `${service.duration_minutes} min` : "Duración variable"}
           </div>
           <div className="text-right">
             <span className="text-sm text-gray-500">Desde</span>
             <div className="text-2xl font-bold text-blue-600">
-              ${service.basePrice}
+              ${service.base_price}
             </div>
           </div>
         </div>
