@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   Calendar, 
   Users, 
@@ -29,17 +30,18 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import AdminZoneMap from "@/components/AdminZoneMap";
 
-// Update Zone interface to match database schema
 interface Zone {
   id: string;
   name: string;
-  multiplier: number;
+  multiplier: number | null;
   description: string | null;
   color: string | null;
-  coordinates: any; // Using any for now since coordinates can be various JSON formats
+  coordinates: any;
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  pricing_type: string | null;
+  fixed_price: number | null;
 }
 
 interface Service {
@@ -49,6 +51,16 @@ interface Service {
   base_price: number;
   description: string;
   duration_minutes: number;
+  is_active: boolean;
+  deposit_type: string;
+  deposit_amount: number;
+}
+
+interface ServiceZonePrice {
+  id: string;
+  service_id: string;
+  zone_id: string;
+  custom_price: number;
   is_active: boolean;
 }
 
@@ -66,15 +78,22 @@ interface PaymentMethod {
   type: string;
   config_data: any;
   is_active: boolean;
+  public_key: string | null;
+  secret_key: string | null;
+  webhook_url: string | null;
+  client_id: string | null;
+  client_secret: string | null;
 }
 
 const Admin = () => {
   const { user, profile, signOut } = useAuth();
   const [zones, setZones] = useState<Zone[]>([]);
   const [services, setServices] = useState<Service[]>([]);
+  const [serviceZonePrices, setServiceZonePrices] = useState<ServiceZonePrice[]>([]);
   const [apiConfigs, setApiConfigs] = useState<ApiConfig[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedServiceForZones, setSelectedServiceForZones] = useState<string>('');
 
   // New service form
   const [newService, setNewService] = useState({
@@ -82,12 +101,21 @@ const Admin = () => {
     category: '',
     description: '',
     base_price: '',
-    duration_minutes: ''
+    duration_minutes: '',
+    deposit_type: 'none',
+    deposit_amount: ''
   });
+
+  // Zone pricing form
+  const [zonePricing, setZonePricing] = useState<Record<string, string>>({});
 
   // API Configuration states
   const [editingApi, setEditingApi] = useState<string | null>(null);
   const [apiValues, setApiValues] = useState<Record<string, string>>({});
+
+  // Payment method editing
+  const [editingPayment, setEditingPayment] = useState<string | null>(null);
+  const [paymentValues, setPaymentValues] = useState<Record<string, any>>({});
 
   useEffect(() => {
     fetchData();
@@ -96,43 +124,68 @@ const Admin = () => {
   const fetchData = async () => {
     setLoading(true);
     
-    // Fetch zones
-    const { data: zonesData } = await supabase
-      .from('zones')
-      .select('*')
-      .order('name');
-    
-    // Fetch services
-    const { data: servicesData } = await supabase
-      .from('services')
-      .select('*')
-      .order('name');
-    
-    // Fetch API configs
-    const { data: apiData } = await supabase
-      .from('api_configs')
-      .select('*')
-      .order('name');
-    
-    // Fetch payment methods
-    const { data: paymentData } = await supabase
-      .from('payment_methods')
-      .select('*')
-      .order('name');
+    try {
+      // Fetch zones
+      const { data: zonesData } = await supabase
+        .from('zones')
+        .select('*')
+        .order('name');
+      
+      // Fetch services
+      const { data: servicesData } = await supabase
+        .from('services')
+        .select('*')
+        .order('name');
+      
+      // Fetch service zone prices
+      const { data: serviceZoneData } = await supabase
+        .from('service_zone_prices')
+        .select('*');
+      
+      // Fetch API configs
+      const { data: apiData } = await supabase
+        .from('api_configs')
+        .select('*')
+        .order('name');
+      
+      // Fetch payment methods
+      const { data: paymentData } = await supabase
+        .from('payment_methods')
+        .select('*')
+        .order('name');
 
-    setZones(zonesData || []);
-    setServices(servicesData || []);
-    setApiConfigs(apiData || []);
-    setPaymentMethods(paymentData || []);
-    
-    // Initialize API values
-    const initialApiValues: Record<string, string> = {};
-    apiData?.forEach(api => {
-      initialApiValues[api.id] = api.api_key || '';
-    });
-    setApiValues(initialApiValues);
-    
-    setLoading(false);
+      setZones(zonesData || []);
+      setServices(servicesData || []);
+      setServiceZonePrices(serviceZoneData || []);
+      setApiConfigs(apiData || []);
+      setPaymentMethods(paymentData || []);
+      
+      // Initialize API values
+      const initialApiValues: Record<string, string> = {};
+      apiData?.forEach(api => {
+        initialApiValues[api.id] = api.api_key || '';
+      });
+      setApiValues(initialApiValues);
+
+      // Initialize payment values
+      const initialPaymentValues: Record<string, any> = {};
+      paymentData?.forEach(payment => {
+        initialPaymentValues[payment.id] = {
+          public_key: payment.public_key || '',
+          secret_key: payment.secret_key || '',
+          webhook_url: payment.webhook_url || '',
+          client_id: payment.client_id || '',
+          client_secret: payment.client_secret || ''
+        };
+      });
+      setPaymentValues(initialPaymentValues);
+      
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      toast.error('Error al cargar datos');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCreateService = async (e: React.FormEvent) => {
@@ -145,7 +198,9 @@ const Admin = () => {
         category: newService.category,
         description: newService.description,
         base_price: parseFloat(newService.base_price),
-        duration_minutes: parseInt(newService.duration_minutes) || null
+        duration_minutes: parseInt(newService.duration_minutes) || null,
+        deposit_type: newService.deposit_type,
+        deposit_amount: parseFloat(newService.deposit_amount) || 0
       }]);
 
     if (error) {
@@ -157,7 +212,9 @@ const Admin = () => {
         category: '',
         description: '',
         base_price: '',
-        duration_minutes: ''
+        duration_minutes: '',
+        deposit_type: 'none',
+        deposit_amount: ''
       });
       fetchData();
     }
@@ -178,66 +235,85 @@ const Admin = () => {
     }
   };
 
+  const handleUpdatePaymentMethod = async (paymentId: string, values: any) => {
+    const { error } = await supabase
+      .from('payment_methods')
+      .update(values)
+      .eq('id', paymentId);
+
+    if (error) {
+      toast.error('Error al actualizar método de pago: ' + error.message);
+    } else {
+      toast.success('Método de pago actualizado exitosamente');
+      setEditingPayment(null);
+      fetchData();
+    }
+  };
+
+  const handleSaveZonePricing = async (serviceId: string, zoneId: string, price: string) => {
+    const customPrice = parseFloat(price);
+    if (isNaN(customPrice)) {
+      toast.error('Precio inválido');
+      return;
+    }
+
+    // Check if record exists
+    const existing = serviceZonePrices.find(
+      szp => szp.service_id === serviceId && szp.zone_id === zoneId
+    );
+
+    if (existing) {
+      const { error } = await supabase
+        .from('service_zone_prices')
+        .update({ custom_price: customPrice })
+        .eq('id', existing.id);
+
+      if (error) {
+        toast.error('Error al actualizar precio: ' + error.message);
+      } else {
+        toast.success('Precio actualizado exitosamente');
+      }
+    } else {
+      const { error } = await supabase
+        .from('service_zone_prices')
+        .insert([{
+          service_id: serviceId,
+          zone_id: zoneId,
+          custom_price: customPrice
+        }]);
+
+      if (error) {
+        toast.error('Error al crear precio: ' + error.message);
+      } else {
+        toast.success('Precio creado exitosamente');
+      }
+    }
+
+    fetchData();
+  };
+
   const handleZoneUpdate = (updatedZones: Zone[]) => {
     setZones(updatedZones);
   };
 
-  // Mock data for dashboard stats
-  const stats = {
-    totalBookings: 45,
-    totalRevenue: 8750,
-    activeCustomers: 32,
-    completedServices: 38
+  const getServiceZonePrice = (serviceId: string, zoneId: string) => {
+    const customPrice = serviceZonePrices.find(
+      szp => szp.service_id === serviceId && szp.zone_id === zoneId
+    );
+    return customPrice?.custom_price || null;
   };
 
-  const recentBookings = [
-    {
-      id: 1,
-      customer: "Juan Pérez",
-      service: "Reparación de Plomería",
-      date: "2024-07-05",
-      time: "10:00",
-      status: "confirmed",
-      price: 89,
-      zone: "Zona Centro"
-    },
-    {
-      id: 2,
-      customer: "María González",
-      service: "Instalación Eléctrica", 
-      date: "2024-07-06",
-      time: "14:00",
-      status: "pending",
-      price: 95,
-      zone: "Zona Norte"
-    },
-    {
-      id: 3,
-      customer: "Carlos Silva",
-      service: "Pintura Interior",
-      date: "2024-07-07",
-      time: "09:00",
-      status: "completed",
-      price: 150,
-      zone: "Zona Sur"
+  const calculateFinalPrice = (service: Service, zone: Zone) => {
+    const customPrice = getServiceZonePrice(service.id, zone.id);
+    if (customPrice) {
+      return customPrice;
     }
-  ];
 
-  const getStatusBadge = (status: string) => {
-    const variants = {
-      pending: { variant: "secondary" as const, text: "Pendiente" },
-      confirmed: { variant: "default" as const, text: "Confirmado" },
-      completed: { variant: "outline" as const, text: "Completado" },
-      cancelled: { variant: "destructive" as const, text: "Cancelado" }
-    };
-    
-    const config = variants[status as keyof typeof variants] || variants.pending;
-    
-    return (
-      <Badge variant={config.variant}>
-        {config.text}
-      </Badge>
-    );
+    if (zone.pricing_type === 'fixed' && zone.fixed_price) {
+      return service.base_price + zone.fixed_price;
+    } else {
+      return service.base_price * (zone.multiplier || 1);
+    }
   };
 
   if (loading) {
@@ -274,7 +350,6 @@ const Admin = () => {
       </header>
 
       <div className="px-6 py-6">
-        {/* Main Content */}
         <Tabs defaultValue="services" className="space-y-6">
           <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="services">Servicios</TabsTrigger>
@@ -286,7 +361,7 @@ const Admin = () => {
 
           {/* Services Tab */}
           <TabsContent value="services" className="space-y-6">
-            <div className="grid md:grid-cols-2 gap-6">
+            <div className="grid gap-6">
               {/* Create Service */}
               <Card>
                 <CardHeader>
@@ -295,26 +370,28 @@ const Admin = () => {
                 </CardHeader>
                 <CardContent>
                   <form onSubmit={handleCreateService} className="space-y-4">
-                    <div>
-                      <Label htmlFor="serviceName">Nombre del Servicio</Label>
-                      <Input
-                        id="serviceName"
-                        value={newService.name}
-                        onChange={(e) => setNewService({...newService, name: e.target.value})}
-                        placeholder="Reparación de Plomería"
-                        required
-                      />
-                    </div>
-                    
-                    <div>
-                      <Label htmlFor="serviceCategory">Categoría</Label>
-                      <Input
-                        id="serviceCategory"
-                        value={newService.category}
-                        onChange={(e) => setNewService({...newService, category: e.target.value})}
-                        placeholder="Plomería"
-                        required
-                      />
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="serviceName">Nombre del Servicio</Label>
+                        <Input
+                          id="serviceName"
+                          value={newService.name}
+                          onChange={(e) => setNewService({...newService, name: e.target.value})}
+                          placeholder="Reparación de Plomería"
+                          required
+                        />
+                      </div>
+                      
+                      <div>
+                        <Label htmlFor="serviceCategory">Categoría</Label>
+                        <Input
+                          id="serviceCategory"
+                          value={newService.category}
+                          onChange={(e) => setNewService({...newService, category: e.target.value})}
+                          placeholder="Plomería"
+                          required
+                        />
+                      </div>
                     </div>
                     
                     <div>
@@ -327,29 +404,61 @@ const Admin = () => {
                       />
                     </div>
                     
-                    <div>
-                      <Label htmlFor="servicePrice">Precio Base ($)</Label>
-                      <Input
-                        id="servicePrice"
-                        type="number"
-                        step="0.01"
-                        value={newService.base_price}
-                        onChange={(e) => setNewService({...newService, base_price: e.target.value})}
-                        placeholder="89.99"
-                        required
-                      />
+                    <div className="grid md:grid-cols-3 gap-4">
+                      <div>
+                        <Label htmlFor="servicePrice">Precio Base ($)</Label>
+                        <Input
+                          id="servicePrice"
+                          type="number"
+                          step="0.01"
+                          value={newService.base_price}
+                          onChange={(e) => setNewService({...newService, base_price: e.target.value})}
+                          placeholder="89.99"
+                          required
+                        />
+                      </div>
+                      
+                      <div>
+                        <Label htmlFor="serviceDuration">Duración (minutos)</Label>
+                        <Input
+                          id="serviceDuration"
+                          type="number"
+                          value={newService.duration_minutes}
+                          onChange={(e) => setNewService({...newService, duration_minutes: e.target.value})}
+                          placeholder="120"
+                        />
+                      </div>
+
+                      <div>
+                        <Label htmlFor="depositType">Tipo de Depósito</Label>
+                        <Select value={newService.deposit_type} onValueChange={(value) => setNewService({...newService, deposit_type: value})}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar tipo" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Sin depósito</SelectItem>
+                            <SelectItem value="fixed">Monto fijo</SelectItem>
+                            <SelectItem value="percentage">Porcentaje</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
-                    
-                    <div>
-                      <Label htmlFor="serviceDuration">Duración (minutos)</Label>
-                      <Input
-                        id="serviceDuration"
-                        type="number"
-                        value={newService.duration_minutes}
-                        onChange={(e) => setNewService({...newService, duration_minutes: e.target.value})}
-                        placeholder="120"
-                      />
-                    </div>
+
+                    {newService.deposit_type !== 'none' && (
+                      <div>
+                        <Label htmlFor="depositAmount">
+                          {newService.deposit_type === 'percentage' ? 'Porcentaje de Depósito (%)' : 'Monto de Depósito ($)'}
+                        </Label>
+                        <Input
+                          id="depositAmount"
+                          type="number"
+                          step="0.01"
+                          value={newService.deposit_amount}
+                          onChange={(e) => setNewService({...newService, deposit_amount: e.target.value})}
+                          placeholder={newService.deposit_type === 'percentage' ? '30' : '25.00'}
+                        />
+                      </div>
+                    )}
                     
                     <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700">
                       <Plus className="h-4 w-4 mr-2" />
@@ -359,26 +468,87 @@ const Admin = () => {
                 </CardContent>
               </Card>
 
-              {/* Services List */}
+              {/* Services List with Zone Pricing */}
               <Card>
                 <CardHeader>
-                  <CardTitle>Servicios Existentes</CardTitle>
-                  <CardDescription>Gestiona los servicios disponibles</CardDescription>
+                  <CardTitle>Servicios y Precios por Zona</CardTitle>
+                  <CardDescription>Gestiona los servicios y sus precios por zona</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-3 max-h-96 overflow-y-auto">
+                  <div className="space-y-4">
                     {services.map((service) => (
-                      <div key={service.id} className="border rounded-lg p-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-semibold">{service.name}</h4>
+                      <div key={service.id} className="border rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <h4 className="font-semibold">{service.name}</h4>
+                            <p className="text-sm text-gray-600">{service.description}</p>
+                            <div className="flex items-center gap-4 mt-2">
+                              <span className="text-green-600 font-medium">${service.base_price}</span>
+                              <span className="text-gray-500">{service.category}</span>
+                              {service.deposit_type !== 'none' && (
+                                <span className="text-blue-600 text-sm">
+                                  Depósito: {service.deposit_type === 'percentage' ? `${service.deposit_amount}%` : `$${service.deposit_amount}`}
+                                </span>
+                              )}
+                            </div>
+                          </div>
                           <Badge variant={service.is_active ? "default" : "secondary"}>
                             {service.is_active ? "Activo" : "Inactivo"}
                           </Badge>
                         </div>
-                        <p className="text-sm text-gray-600 mb-2">{service.description}</p>
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-green-600 font-medium">${service.base_price}</span>
-                          <span className="text-gray-500">{service.category}</span>
+
+                        <div className="mt-4">
+                          <h5 className="font-medium mb-2">Precios por Zona</h5>
+                          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {zones.map((zone) => (
+                              <div key={zone.id} className="border rounded p-3 bg-gray-50">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="font-medium">{zone.name}</span>
+                                  <div 
+                                    className="w-3 h-3 rounded-full"
+                                    style={{ backgroundColor: zone.color || '#3B82F6' }}
+                                  ></div>
+                                </div>
+                                <div className="text-sm text-gray-600 mb-2">
+                                  {zone.pricing_type === 'fixed' 
+                                    ? `+$${zone.fixed_price} fijo`
+                                    : `${zone.multiplier}x multiplicador`
+                                  }
+                                </div>
+                                
+                                <div className="flex items-center gap-2">
+                                  <Input
+                                    type="number"
+                                    step="0.01"
+                                    placeholder={`$${calculateFinalPrice(service, zone)}`}
+                                    value={zonePricing[`${service.id}-${zone.id}`] || ''}
+                                    onChange={(e) => setZonePricing({
+                                      ...zonePricing,
+                                      [`${service.id}-${zone.id}`]: e.target.value
+                                    })}
+                                    className="text-sm"
+                                  />
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleSaveZonePricing(
+                                      service.id, 
+                                      zone.id, 
+                                      zonePricing[`${service.id}-${zone.id}`]
+                                    )}
+                                    disabled={!zonePricing[`${service.id}-${zone.id}`]}
+                                  >
+                                    <Save className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                                
+                                {getServiceZonePrice(service.id, zone.id) && (
+                                  <div className="text-xs text-green-600 mt-1">
+                                    Precio personalizado: ${getServiceZonePrice(service.id, zone.id)}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -428,7 +598,7 @@ const Admin = () => {
                         {editingApi === api.id ? (
                           <>
                             <Input
-                              type="password"
+                              type="text"
                               value={apiValues[api.id] || ''}
                               onChange={(e) => setApiValues({
                                 ...apiValues,
@@ -497,22 +667,160 @@ const Admin = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="grid md:grid-cols-2 gap-4">
+                <div className="space-y-6">
                   {paymentMethods.map((method) => (
                     <div key={method.id} className="border rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-semibold">{method.name}</h4>
+                      <div className="flex items-center justify-between mb-4">
+                        <div>
+                          <h4 className="font-semibold">{method.name}</h4>
+                          <p className="text-sm text-gray-600">Tipo: {method.type}</p>
+                        </div>
                         <Badge variant={method.is_active ? "default" : "secondary"}>
                           {method.is_active ? "Activo" : "Inactivo"}
                         </Badge>
                       </div>
-                      <p className="text-sm text-gray-600 mb-3">
-                        Tipo: {method.type}
-                      </p>
-                      <Button variant="outline" size="sm">
-                        <Settings className="h-4 w-4 mr-2" />
-                        Configurar
-                      </Button>
+
+                      {editingPayment === method.id ? (
+                        <div className="space-y-3">
+                          <div className="grid md:grid-cols-2 gap-3">
+                            <div>
+                              <Label>Public Key</Label>
+                              <Input
+                                type="text"
+                                value={paymentValues[method.id]?.public_key || ''}
+                                onChange={(e) => setPaymentValues({
+                                  ...paymentValues,
+                                  [method.id]: {
+                                    ...paymentValues[method.id],
+                                    public_key: e.target.value
+                                  }
+                                })}
+                                placeholder="pk_test_..."
+                              />
+                            </div>
+                            <div>
+                              <Label>Secret Key</Label>
+                              <Input
+                                type="password"
+                                value={paymentValues[method.id]?.secret_key || ''}
+                                onChange={(e) => setPaymentValues({
+                                  ...paymentValues,
+                                  [method.id]: {
+                                    ...paymentValues[method.id],
+                                    secret_key: e.target.value
+                                  }
+                                })}
+                                placeholder="sk_test_..."
+                              />
+                            </div>
+                          </div>
+
+                          {method.type === 'paypal' && (
+                            <div className="grid md:grid-cols-2 gap-3">
+                              <div>
+                                <Label>Client ID</Label>
+                                <Input
+                                  type="text"
+                                  value={paymentValues[method.id]?.client_id || ''}
+                                  onChange={(e) => setPaymentValues({
+                                    ...paymentValues,
+                                    [method.id]: {
+                                      ...paymentValues[method.id],
+                                      client_id: e.target.value
+                                    }
+                                  })}
+                                  placeholder="PayPal Client ID"
+                                />
+                              </div>
+                              <div>
+                                <Label>Client Secret</Label>
+                                <Input
+                                  type="password"
+                                  value={paymentValues[method.id]?.client_secret || ''}
+                                  onChange={(e) => setPaymentValues({
+                                    ...paymentValues,
+                                    [method.id]: {
+                                      ...paymentValues[method.id],
+                                      client_secret: e.target.value
+                                    }
+                                  })}
+                                  placeholder="PayPal Client Secret"
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          <div>
+                            <Label>Webhook URL</Label>
+                            <Input
+                              type="url"
+                              value={paymentValues[method.id]?.webhook_url || ''}
+                              onChange={(e) => setPaymentValues({
+                                ...paymentValues,
+                                [method.id]: {
+                                  ...paymentValues[method.id],
+                                  webhook_url: e.target.value
+                                }
+                              })}
+                              placeholder="https://tu-dominio.com/webhook"
+                            />
+                          </div>
+
+                          <div className="flex gap-2 pt-2">
+                            <Button
+                              onClick={() => handleUpdatePaymentMethod(method.id, paymentValues[method.id])}
+                              className="bg-green-600 hover:bg-green-700"
+                            >
+                              <Save className="h-4 w-4 mr-2" />
+                              Guardar
+                            </Button>
+                            <Button
+                              onClick={() => setEditingPayment(null)}
+                              variant="outline"
+                            >
+                              Cancelar
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <div className="grid md:grid-cols-2 gap-4 text-sm">
+                            <div>
+                              <span className="text-gray-600">Public Key:</span>
+                              <span className="ml-2">{method.public_key ? '••••••••••••••••' : 'No configurado'}</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-600">Secret Key:</span>
+                              <span className="ml-2">{method.secret_key ? '••••••••••••••••' : 'No configurado'}</span>
+                            </div>
+                            {method.type === 'paypal' && (
+                              <>
+                                <div>
+                                  <span className="text-gray-600">Client ID:</span>
+                                  <span className="ml-2">{method.client_id ? '••••••••••••••••' : 'No configurado'}</span>
+                                </div>
+                                <div>
+                                  <span className="text-gray-600">Client Secret:</span>
+                                  <span className="ml-2">{method.client_secret ? '••••••••••••••••' : 'No configurado'}</span>
+                                </div>
+                              </>
+                            )}
+                            <div className="md:col-span-2">
+                              <span className="text-gray-600">Webhook:</span>
+                              <span className="ml-2">{method.webhook_url || 'No configurado'}</span>
+                            </div>
+                          </div>
+                          <Button
+                            onClick={() => setEditingPayment(method.id)}
+                            variant="outline"
+                            size="sm"
+                            className="mt-3"
+                          >
+                            <Settings className="h-4 w-4 mr-2" />
+                            Configurar
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -585,7 +893,12 @@ const Admin = () => {
                             }}
                           ></div>
                         </div>
-                        <span className="text-sm text-gray-600">{zone.multiplier}x</span>
+                        <span className="text-sm text-gray-600">
+                          {zone.pricing_type === 'fixed' 
+                            ? `+$${zone.fixed_price}`
+                            : `${zone.multiplier}x`
+                          }
+                        </span>
                       </div>
                     </div>
                   ))}

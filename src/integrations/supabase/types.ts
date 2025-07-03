@@ -119,31 +119,46 @@ export type Database = {
       }
       payment_methods: {
         Row: {
+          client_id: string | null
+          client_secret: string | null
           config_data: Json | null
           created_at: string | null
           id: string
           is_active: boolean | null
           name: string
+          public_key: string | null
+          secret_key: string | null
           type: string
           updated_at: string | null
+          webhook_url: string | null
         }
         Insert: {
+          client_id?: string | null
+          client_secret?: string | null
           config_data?: Json | null
           created_at?: string | null
           id?: string
           is_active?: boolean | null
           name: string
+          public_key?: string | null
+          secret_key?: string | null
           type: string
           updated_at?: string | null
+          webhook_url?: string | null
         }
         Update: {
+          client_id?: string | null
+          client_secret?: string | null
           config_data?: Json | null
           created_at?: string | null
           id?: string
           is_active?: boolean | null
           name?: string
+          public_key?: string | null
+          secret_key?: string | null
           type?: string
           updated_at?: string | null
+          webhook_url?: string | null
         }
         Relationships: []
       }
@@ -177,11 +192,58 @@ export type Database = {
         }
         Relationships: []
       }
+      service_zone_prices: {
+        Row: {
+          created_at: string | null
+          custom_price: number
+          id: string
+          is_active: boolean | null
+          service_id: string | null
+          updated_at: string | null
+          zone_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          custom_price: number
+          id?: string
+          is_active?: boolean | null
+          service_id?: string | null
+          updated_at?: string | null
+          zone_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          custom_price?: number
+          id?: string
+          is_active?: boolean | null
+          service_id?: string | null
+          updated_at?: string | null
+          zone_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_zone_prices_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_zone_prices_zone_id_fkey"
+            columns: ["zone_id"]
+            isOneToOne: false
+            referencedRelation: "zones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       services: {
         Row: {
           base_price: number
           category: string | null
           created_at: string | null
+          deposit_amount: number | null
+          deposit_type: string | null
           description: string | null
           duration_minutes: number | null
           id: string
@@ -193,6 +255,8 @@ export type Database = {
           base_price: number
           category?: string | null
           created_at?: string | null
+          deposit_amount?: number | null
+          deposit_type?: string | null
           description?: string | null
           duration_minutes?: number | null
           id?: string
@@ -204,6 +268,8 @@ export type Database = {
           base_price?: number
           category?: string | null
           created_at?: string | null
+          deposit_amount?: number | null
+          deposit_type?: string | null
           description?: string | null
           duration_minutes?: number | null
           id?: string
@@ -219,10 +285,12 @@ export type Database = {
           coordinates: Json | null
           created_at: string | null
           description: string | null
+          fixed_price: number | null
           id: string
           is_active: boolean | null
           multiplier: number | null
           name: string
+          pricing_type: string | null
           updated_at: string | null
         }
         Insert: {
@@ -230,10 +298,12 @@ export type Database = {
           coordinates?: Json | null
           created_at?: string | null
           description?: string | null
+          fixed_price?: number | null
           id?: string
           is_active?: boolean | null
           multiplier?: number | null
           name: string
+          pricing_type?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -241,10 +311,12 @@ export type Database = {
           coordinates?: Json | null
           created_at?: string | null
           description?: string | null
+          fixed_price?: number | null
           id?: string
           is_active?: boolean | null
           multiplier?: number | null
           name?: string
+          pricing_type?: string | null
           updated_at?: string | null
         }
         Relationships: []

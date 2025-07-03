@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Zone {
   id: number;
@@ -38,112 +39,144 @@ const ZoneMap: React.FC<ZoneMapProps> = ({
   const [mapboxToken, setMapboxToken] = useState('');
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
   const [selectedAddress, setSelectedAddress] = useState('');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!mapContainer.current || !mapboxToken) return;
+    fetchMapboxToken();
+  }, []);
 
-    mapboxgl.accessToken = mapboxToken;
-    
-    map.current = new mapboxgl.Map({
-      container: mapContainer.current,
-      style: 'mapbox://styles/mapbox/streets-v12',
-      center: center,
-      zoom: zoom,
-    });
+  const fetchMapboxToken = async () => {
+    try {
+      const { data } = await supabase
+        .from('api_configs')
+        .select('api_key')
+        .eq('name', 'mapbox')
+        .single();
+      
+      if (data?.api_key) {
+        setMapboxToken(data.api_key);
+      } else {
+        // Usar el token proporcionado por el usuario como fallback
+        setMapboxToken('sk.eyJ1IjoiYWxleGlzbWVuZG96YXZlIiwiYSI6ImNtY25xMWdwNjB4ajgycXBwNnhqNXZlaWsifQ.fwEzsi4qbtziXbFJjgrI8A');
+      }
+    } catch (error) {
+      console.error('Error fetching Mapbox token:', error);
+      // Usar el token proporcionado por el usuario como fallback
+      setMapboxToken('sk.eyJ1IjoiYWxleGlzbWVuZG96YXZlIiwiYSI6ImNtY25xMWdwNjB4ajgycXBwNnhqNXZlaWsifQ.fwEzsi4qbtziXbFJjgrI8A');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    // Add navigation controls
-    map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
+  useEffect(() => {
+    if (!mapContainer.current || !mapboxToken || loading) return;
 
-    // Add zones to map
-    map.current.on('load', () => {
-      zones.forEach((zone, index) => {
-        if (zone.coordinates && zone.coordinates.length > 0) {
-          // Create polygon for zone
-          const polygonCoordinates = [...zone.coordinates, zone.coordinates[0]]; // Close polygon
-          
-          map.current?.addSource(`zone-${zone.id}`, {
-            type: 'geojson',
-            data: {
-              type: 'Feature',
-              properties: {
-                zoneId: zone.id,
-                name: zone.name,
-                description: zone.description,
-                multiplier: zone.multiplier
-              },
-              geometry: {
-                type: 'Polygon',
-                coordinates: [polygonCoordinates]
-              }
-            }
-          });
-
-          // Add fill layer
-          map.current?.addLayer({
-            id: `zone-fill-${zone.id}`,
-            type: 'fill',
-            source: `zone-${zone.id}`,
-            paint: {
-              'fill-color': zone.color,
-              'fill-opacity': selectedZone?.id === zone.id ? 0.6 : 0.3
-            }
-          });
-
-          // Add border layer
-          map.current?.addLayer({
-            id: `zone-border-${zone.id}`,
-            type: 'line',
-            source: `zone-${zone.id}`,
-            paint: {
-              'line-color': zone.color,
-              'line-width': selectedZone?.id === zone.id ? 3 : 2
-            }
-          });
-
-          // Add zone label
-          const center = zone.coordinates.reduce(
-            (acc, coord) => [acc[0] + coord[0], acc[1] + coord[1]],
-            [0, 0]
-          ).map(sum => sum / zone.coordinates.length) as [number, number];
-
-          new mapboxgl.Marker({
-            element: createZoneLabel(zone),
-            anchor: 'center'
-          })
-            .setLngLat(center)
-            .addTo(map.current!);
-        }
+    try {
+      mapboxgl.accessToken = mapboxToken;
+      
+      map.current = new mapboxgl.Map({
+        container: mapContainer.current,
+        style: 'mapbox://styles/mapbox/streets-v12',
+        center: center,
+        zoom: zoom,
       });
 
-      // Add click handler for zones
-      map.current?.on('click', (e) => {
-        const features = map.current?.queryRenderedFeatures(e.point, {
-          layers: zones.map(z => `zone-fill-${z.id}`)
+      // Add navigation controls
+      map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
+
+      // Add zones to map
+      map.current.on('load', () => {
+        zones.forEach((zone, index) => {
+          if (zone.coordinates && zone.coordinates.length > 0) {
+            // Create polygon for zone
+            const polygonCoordinates = [...zone.coordinates, zone.coordinates[0]]; // Close polygon
+            
+            map.current?.addSource(`zone-${zone.id}`, {
+              type: 'geojson',
+              data: {
+                type: 'Feature',
+                properties: {
+                  zoneId: zone.id,
+                  name: zone.name,
+                  description: zone.description,
+                  multiplier: zone.multiplier
+                },
+                geometry: {
+                  type: 'Polygon',
+                  coordinates: [polygonCoordinates]
+                }
+              }
+            });
+
+            // Add fill layer
+            map.current?.addLayer({
+              id: `zone-fill-${zone.id}`,
+              type: 'fill',
+              source: `zone-${zone.id}`,
+              paint: {
+                'fill-color': zone.color,
+                'fill-opacity': selectedZone?.id === zone.id ? 0.6 : 0.3
+              }
+            });
+
+            // Add border layer
+            map.current?.addLayer({
+              id: `zone-border-${zone.id}`,
+              type: 'line',
+              source: `zone-${zone.id}`,
+              paint: {
+                'line-color': zone.color,
+                'line-width': selectedZone?.id === zone.id ? 3 : 2
+              }
+            });
+
+            // Add zone label
+            const center = zone.coordinates.reduce(
+              (acc, coord) => [acc[0] + coord[0], acc[1] + coord[1]],
+              [0, 0]
+            ).map(sum => sum / zone.coordinates.length) as [number, number];
+
+            new mapboxgl.Marker({
+              element: createZoneLabel(zone),
+              anchor: 'center'
+            })
+              .setLngLat(center)
+              .addTo(map.current!);
+          }
         });
 
-        if (features && features.length > 0) {
-          const zoneId = features[0].properties?.zoneId;
-          const zone = zones.find(z => z.id === zoneId);
-          if (zone && onZoneSelect) {
-            onZoneSelect(zone);
-          }
-        } else {
-          // User clicked outside zones - set location
-          if (onLocationSelect) {
-            reverseGeocode(e.lngLat.lng, e.lngLat.lat).then(address => {
-              setUserLocation([e.lngLat.lng, e.lngLat.lat]);
-              setSelectedAddress(address);
-              onLocationSelect(e.lngLat.lat, e.lngLat.lng, address);
-            });
-          }
-        }
-      });
-    });
+        // Add click handler for zones
+        map.current?.on('click', (e) => {
+          const features = map.current?.queryRenderedFeatures(e.point, {
+            layers: zones.map(z => `zone-fill-${z.id}`)
+          });
 
-    return () => {
-      map.current?.remove();
-    };
-  }, [mapboxToken, zones, selectedZone, center, zoom]);
+          if (features && features.length > 0) {
+            const zoneId = features[0].properties?.zoneId;
+            const zone = zones.find(z => z.id === zoneId);
+            if (zone && onZoneSelect) {
+              onZoneSelect(zone);
+            }
+          } else {
+            // User clicked outside zones - set location
+            if (onLocationSelect) {
+              reverseGeocode(e.lngLat.lng, e.lngLat.lat).then(address => {
+                setUserLocation([e.lngLat.lng, e.lngLat.lat]);
+                setSelectedAddress(address);
+                onLocationSelect(e.lngLat.lat, e.lngLat.lng, address);
+              });
+            }
+          }
+        });
+      });
+
+      return () => {
+        map.current?.remove();
+      };
+    } catch (error) {
+      console.error('Error initializing map:', error);
+    }
+  }, [mapboxToken, zones, selectedZone, center, zoom, loading]);
 
   const createZoneLabel = (zone: Zone) => {
     const el = document.createElement('div');
@@ -203,26 +236,32 @@ const ZoneMap: React.FC<ZoneMapProps> = ({
     }
   };
 
+  if (loading) {
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <span className="ml-2">Cargando mapa...</span>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   if (!mapboxToken) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Configurar Mapbox</CardTitle>
+          <CardTitle>Error de Configuración</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <Label htmlFor="mapbox-token">Token público de Mapbox</Label>
-            <Input
-              id="mapbox-token"
-              type="text"
-              placeholder="pk.eyJ1IjoiZXhhbXBsZSIsImEiOiJjbGV4YW1wbGUifQ..."
-            value="sk.eyJ1IjoiYWxleGlzbWVuZG96YXZlIiwiYSI6ImNtY21vNHhyZzBuMXYycnB0dTJiZDMxMDgifQ.qNETDGvdbBLziszZrYfWEw"
-              onChange={(e) => setMapboxToken(e.target.value)}
-            />
-            <p className="text-sm text-gray-600 mt-2">
-              Obtén tu token en <a href="https://mapbox.com/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">mapbox.com</a>
-            </p>
-          </div>
+        <CardContent>
+          <p className="text-red-600 mb-4">
+            No se pudo cargar el token de Mapbox. Por favor verifica la configuración en la sección de APIs.
+          </p>
+          <p className="text-sm text-gray-600">
+            Obtén tu token en <a href="https://mapbox.com/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">mapbox.com</a>
+          </p>
         </CardContent>
       </Card>
     );

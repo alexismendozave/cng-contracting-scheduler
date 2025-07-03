@@ -1,5 +1,4 @@
-
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import ServiceCard from "@/components/ServiceCard";
@@ -18,42 +17,36 @@ import {
   LogIn
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 
 const Index = () => {
   const { user, profile, signOut } = useAuth();
+  const [services, setServices] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const services = [
-    {
-      id: 1,
-      name: "Reparación de Plomería",
-      description: "Solucionamos todo tipo de problemas de plomería, desde fugas hasta instalaciones completas.",
-      basePrice: 89,
-      duration: "2-3 horas",
-      isPackage: false,
-      rating: 4.5,
-      reviews: 120
-    },
-    {
-      id: 2,
-      name: "Instalación Eléctrica",
-      description: "Instalamos y reparamos sistemas eléctricos para hogares y negocios.",
-      basePrice: 95,
-      duration: "3-4 horas",
-      isPackage: false,
-      rating: 4.8,
-      reviews: 150
-    },
-    {
-      id: 3,
-      name: "Pintura Interior",
-      description: "Transformamos tus espacios con servicios de pintura de alta calidad.",
-      basePrice: 150,
-      duration: "1-2 días",
-      isPackage: true,
-      rating: 4.2,
-      reviews: 90
+  useEffect(() => {
+    fetchServices();
+  }, []);
+
+  const fetchServices = async () => {
+    try {
+      const { data: servicesData, error } = await supabase
+        .from('services')
+        .select('*')
+        .eq('is_active', true)
+        .order('name');
+
+      if (error) {
+        console.error('Error fetching services:', error);
+      } else {
+        setServices(servicesData || []);
+      }
+    } catch (error) {
+      console.error('Error fetching services:', error);
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -136,11 +129,17 @@ const Index = () => {
           <h2 className="text-3xl font-bold text-gray-900 mb-8 text-center">
             Nuestros Servicios
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {services.map((service) => (
-              <ServiceCard key={service.id} service={service} />
-            ))}
-          </div>
+          {loading ? (
+            <div className="flex justify-center items-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {services.map((service) => (
+                <ServiceCard key={service.id} service={service} />
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
