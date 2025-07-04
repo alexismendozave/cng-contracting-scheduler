@@ -44,7 +44,8 @@ const ServiceManagement = ({ services, zones, onDataRefresh }: ServiceManagement
     available_zones: 'all',
     selected_zones: [] as string[],
     gallery_images: [] as string[],
-    main_image: ''
+    main_image: '',
+    short_description: ''
   });
 
   const handleCreateService = async () => {
@@ -141,7 +142,8 @@ const ServiceManagement = ({ services, zones, onDataRefresh }: ServiceManagement
       available_zones: 'all',
       selected_zones: [],
       gallery_images: [],
-      main_image: ''
+      main_image: '',
+      short_description: ''
     });
   };
 
@@ -163,7 +165,8 @@ const ServiceManagement = ({ services, zones, onDataRefresh }: ServiceManagement
       available_zones: 'all',
       selected_zones: [],
       gallery_images: [],
-      main_image: ''
+      main_image: '',
+      short_description: '' // service.short_description || '' - field not in database yet
     });
     setIsEditDialogOpen(true);
   };
@@ -346,12 +349,23 @@ const ServiceForm = ({ formData, setFormData, zones, categories, onSubmit, onCan
         </div>
 
         <div>
-          <Label htmlFor="description">Descripción</Label>
+          <Label htmlFor="short_description">Descripción corta</Label>
+          <Input
+            id="short_description"
+            value={formData.short_description || ''}
+            onChange={(e) => setFormData({...formData, short_description: e.target.value})}
+            placeholder="Descripción breve del servicio"
+          />
+        </div>
+
+        <div>
+          <Label htmlFor="description">Descripción completa</Label>
           <Textarea
             id="description"
             value={formData.description}
             onChange={(e) => setFormData({...formData, description: e.target.value})}
-            rows={3}
+            rows={4}
+            placeholder="Descripción detallada del servicio"
           />
         </div>
 
@@ -480,16 +494,51 @@ const ServiceForm = ({ formData, setFormData, zones, categories, onSubmit, onCan
         <div>
           <Label>Imagen principal</Label>
           <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-            <Image className="h-8 w-8 mx-auto text-gray-400 mb-2" />
-            <p className="text-sm text-gray-500">Haz clic para subir imagen principal</p>
+            <input 
+              type="file" 
+              id="main-image" 
+              accept="image/*" 
+              className="hidden" 
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  setFormData({...formData, main_image: file.name});
+                  // Here you would handle the upload
+                }
+              }}
+            />
+            <label htmlFor="main-image" className="cursor-pointer">
+              <Image className="h-8 w-8 mx-auto text-gray-400 mb-2" />
+              <p className="text-sm text-gray-500">Haz clic para subir imagen principal</p>
+              {formData.main_image && <p className="text-xs text-green-600 mt-1">{formData.main_image}</p>}
+            </label>
           </div>
         </div>
 
         <div>
           <Label>Galería de imágenes</Label>
           <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-            <Image className="h-8 w-8 mx-auto text-gray-400 mb-2" />
-            <p className="text-sm text-gray-500">Haz clic para subir imágenes adicionales</p>
+            <input 
+              type="file" 
+              id="gallery-images" 
+              accept="image/*" 
+              multiple 
+              className="hidden" 
+              onChange={(e) => {
+                const files = Array.from(e.target.files || []);
+                if (files.length > 0) {
+                  setFormData({...formData, gallery_images: files.map(f => f.name)});
+                  // Here you would handle the upload
+                }
+              }}
+            />
+            <label htmlFor="gallery-images" className="cursor-pointer">
+              <Image className="h-8 w-8 mx-auto text-gray-400 mb-2" />
+              <p className="text-sm text-gray-500">Haz clic para subir imágenes adicionales</p>
+              {formData.gallery_images.length > 0 && (
+                <p className="text-xs text-green-600 mt-1">{formData.gallery_images.length} imagen(es) seleccionada(s)</p>
+              )}
+            </label>
           </div>
         </div>
       </TabsContent>

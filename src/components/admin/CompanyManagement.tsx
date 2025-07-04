@@ -249,10 +249,28 @@ export default function CompanyManagement() {
                   onChange={(e) => handleInputChange('logo_url', e.target.value)}
                   placeholder="https://ejemplo.com/logo.png"
                 />
-                <Button variant="outline" size="sm" className="w-full">
-                  <Upload className="h-4 w-4 mr-2" />
-                  Subir Logotipo
-                </Button>
+                 <input 
+                   type="file" 
+                   id="logo-upload" 
+                   accept="image/*" 
+                   className="hidden" 
+                   onChange={(e) => {
+                     const file = e.target.files?.[0];
+                     if (file) {
+                       toast.success('Logo seleccionado: ' + file.name);
+                       // Here you would handle the upload and set the URL
+                     }
+                   }}
+                 />
+                 <Button 
+                   variant="outline" 
+                   size="sm" 
+                   className="w-full"
+                   onClick={() => document.getElementById('logo-upload')?.click()}
+                 >
+                   <Upload className="h-4 w-4 mr-2" />
+                   Subir Logotipo
+                 </Button>
               </div>
             </div>
 
@@ -265,10 +283,28 @@ export default function CompanyManagement() {
                   onChange={(e) => handleInputChange('favicon_url', e.target.value)}
                   placeholder="https://ejemplo.com/favicon.ico"
                 />
-                <Button variant="outline" size="sm" className="w-full">
-                  <Upload className="h-4 w-4 mr-2" />
-                  Subir Favicon
-                </Button>
+                 <input 
+                   type="file" 
+                   id="favicon-upload" 
+                   accept="image/*" 
+                   className="hidden" 
+                   onChange={(e) => {
+                     const file = e.target.files?.[0];
+                     if (file) {
+                       toast.success('Favicon seleccionado: ' + file.name);
+                       // Here you would handle the upload and set the URL
+                     }
+                   }}
+                 />
+                 <Button 
+                   variant="outline" 
+                   size="sm" 
+                   className="w-full"
+                   onClick={() => document.getElementById('favicon-upload')?.click()}
+                 >
+                   <Upload className="h-4 w-4 mr-2" />
+                   Subir Favicon
+                 </Button>
               </div>
             </div>
           </CardContent>

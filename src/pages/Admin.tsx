@@ -13,6 +13,8 @@ import PaymentMethodsManagement from "@/components/admin/PaymentMethodsManagemen
 import CustomizationManagement from "@/components/admin/CustomizationManagement";
 import EnhancedZoneMapWrapper from "@/components/admin/wrappers/EnhancedZoneMapWrapper";
 import UserManagement from "@/components/admin/UserManagement";
+import ApiConfigurationWrapper from "@/components/admin/wrappers/ApiConfigurationWrapper";
+import OrdersManagement from "@/components/admin/OrdersManagement";
 
 const Admin = () => {
   const { profile, signOut } = useAuth();
@@ -50,6 +52,8 @@ const Admin = () => {
               <Route path="payments" element={<PaymentMethodsManagement />} />
               <Route path="zones" element={<EnhancedZoneMapWrapper />} />
               <Route path="users" element={<UserManagement />} />
+              <Route path="apis" element={<ApiConfigurationWrapper />} />
+              <Route path="orders" element={<OrdersManagement />} />
               <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
             </Routes>
           </main>

@@ -53,7 +53,7 @@ export default function BookingsManagement() {
       const { data } = await supabase
         .from('bookings')
         .select('*')
-        .neq('status', 'deleted')
+        .in('status', ['pending', 'confirmed', 'paid', 'cancelled'])
         .order('created_at', { ascending: false });
       
       setBookings(data || []);
@@ -101,11 +101,11 @@ export default function BookingsManagement() {
           </div>
         </div>
         <div className="flex gap-2 pt-2">
-          <Button size="sm" variant="outline">
+          <Button size="sm" variant="outline" onClick={() => console.log('Ver reserva:', booking.id)}>
             <Eye className="h-4 w-4 mr-1" />
             Ver
           </Button>
-          <Button size="sm" variant="outline">
+          <Button size="sm" variant="outline" onClick={() => console.log('Editar reserva:', booking.id)}>
             <Edit className="h-4 w-4 mr-1" />
             Editar
           </Button>
@@ -114,27 +114,36 @@ export default function BookingsManagement() {
     </Card>
   );
 
-  const CalendarView = () => (
-    <div className="grid gap-4">
-      <div className="flex justify-between items-center">
-        <h3 className="text-xl font-semibold">Vista de Calendario</h3>
-        <div className="flex gap-2">
-          {Object.entries(statusLabels).map(([status, label]) => (
-            <Badge key={status} className={statusColors[status as keyof typeof statusColors]}>
-              {label}
-            </Badge>
-          ))}
+  const CalendarView = () => {
+    // Filtrar reservas para mostrar solo las que deben aparecer en calendario
+    const calendarBookings = bookings.filter(booking => 
+      ['pending', 'confirmed', 'paid', 'cancelled'].includes(booking.status)
+    );
+
+    return (
+      <div className="grid gap-4">
+        <div className="flex justify-between items-center">
+          <h3 className="text-xl font-semibold">Vista de Calendario</h3>
+          <div className="flex gap-2">
+            {Object.entries(statusLabels).filter(([status]) => 
+              ['pending', 'confirmed', 'paid', 'cancelled'].includes(status)
+            ).map(([status, label]) => (
+              <Badge key={status} className={statusColors[status as keyof typeof statusColors]}>
+                {label}
+              </Badge>
+            ))}
+          </div>
         </div>
+        <Card className="p-6">
+          <div className="text-center text-muted-foreground">
+            <Calendar className="h-12 w-12 mx-auto mb-4" />
+            <p>Vista de calendario con {calendarBookings.length} reservas</p>
+            <p className="text-sm">Calendario interactivo en desarrollo - se mostrarán reservas por fecha</p>
+          </div>
+        </Card>
       </div>
-      <Card className="p-6">
-        <div className="text-center text-muted-foreground">
-          <Calendar className="h-12 w-12 mx-auto mb-4" />
-          <p>Vista de calendario en desarrollo</p>
-          <p className="text-sm">Aquí se mostrará un calendario interactivo con las reservas</p>
-        </div>
-      </Card>
-    </div>
-  );
+    );
+  };
 
   if (loading) {
     return (
