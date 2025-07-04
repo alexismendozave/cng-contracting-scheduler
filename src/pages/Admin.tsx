@@ -15,6 +15,8 @@ import EnhancedZoneMapWrapper from "@/components/admin/wrappers/EnhancedZoneMapW
 import UserManagement from "@/components/admin/UserManagement";
 import ApiConfigurationWrapper from "@/components/admin/wrappers/ApiConfigurationWrapper";
 import OrdersManagement from "@/components/admin/OrdersManagement";
+import EmailConfiguration from "@/components/admin/EmailConfiguration";
+import NotificationsManagement from "@/components/admin/NotificationsManagement";
 
 const Admin = () => {
   const { profile, signOut } = useAuth();
@@ -54,6 +56,8 @@ const Admin = () => {
               <Route path="users" element={<UserManagement />} />
               <Route path="apis" element={<ApiConfigurationWrapper />} />
               <Route path="orders" element={<OrdersManagement />} />
+              <Route path="email" element={<EmailConfiguration />} />
+              <Route path="notifications" element={<NotificationsManagement />} />
               <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
             </Routes>
           </main>

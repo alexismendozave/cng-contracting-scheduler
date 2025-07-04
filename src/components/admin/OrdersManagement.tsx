@@ -3,9 +3,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { FileText, DollarSign, Package, TrendingUp, Download, Eye, Plus } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { FileText, DollarSign, Package, TrendingUp, Download, Eye, Plus, Settings, BarChart3, Receipt, Mail } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
 
 interface Order {
   id: string;
@@ -49,6 +54,16 @@ export default function OrdersManagement() {
   useEffect(() => {
     fetchOrders();
   }, []);
+
+  const handleViewInvoice = (orderId: string) => {
+    // Aquí se implementaría la lógica para ver la factura
+    toast.info(`Abriendo factura para pedido ${orderId}`);
+  };
+
+  const handleDownloadInvoice = (orderId: string) => {
+    // Aquí se implementaría la lógica para descargar la factura en PDF
+    toast.info(`Descargando factura para pedido ${orderId}`);
+  };
 
   const fetchOrders = async () => {
     setLoading(true);
@@ -131,11 +146,11 @@ export default function OrdersManagement() {
           </div>
         </div>
         <div className="flex gap-2 pt-2">
-          <Button size="sm" variant="outline">
+          <Button size="sm" variant="outline" onClick={() => handleViewInvoice(order.id)}>
             <Eye className="h-4 w-4 mr-1" />
             Ver Factura
           </Button>
-          <Button size="sm" variant="outline">
+          <Button size="sm" variant="outline" onClick={() => handleDownloadInvoice(order.id)}>
             <Download className="h-4 w-4 mr-1" />
             Descargar PDF
           </Button>
@@ -245,19 +260,190 @@ export default function OrdersManagement() {
         </TabsContent>
 
         <TabsContent value="analytics">
-          <Card className="p-6 text-center">
-            <TrendingUp className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-            <p className="text-muted-foreground">Analíticas de pedidos en desarrollo</p>
-            <p className="text-sm">Aquí se mostrarán gráficos de ventas, tendencias y reportes detallados</p>
-          </Card>
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart3 className="h-5 w-5" />
+                    Ventas por Mes
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <LineChart data={[
+                      { name: 'Ene', ventas: 1200 },
+                      { name: 'Feb', ventas: 1800 },
+                      { name: 'Mar', ventas: 2200 },
+                      { name: 'Abr', ventas: 1900 },
+                      { name: 'May', ventas: 2500 },
+                      { name: 'Jun', ventas: 2800 }
+                    ]}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" />
+                      <YAxis />
+                      <Tooltip />
+                      <Line type="monotone" dataKey="ventas" stroke="#8884d8" strokeWidth={2} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <TrendingUp className="h-5 w-5" />
+                    Estado de Pedidos
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <PieChart>
+                      <Pie
+                        data={[
+                          { name: 'Pagados', value: 65, fill: '#22c55e' },
+                          { name: 'Pendientes', value: 20, fill: '#eab308' },
+                          { name: 'Cancelados', value: 10, fill: '#ef4444' },
+                          { name: 'Reembolsados', value: 5, fill: '#f97316' }
+                        ]}
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={80}
+                        dataKey="value"
+                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      />
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Ingresos Mensuales</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={[
+                    { mes: 'Ene', ingresos: 15000 },
+                    { mes: 'Feb', ingresos: 22000 },
+                    { mes: 'Mar', ingresos: 28000 },
+                    { mes: 'Abr', ingresos: 19000 },
+                    { mes: 'May', ingresos: 31000 },
+                    { mes: 'Jun', ingresos: 35000 }
+                  ]}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="mes" />
+                    <YAxis />
+                    <Tooltip formatter={(value) => [`$${value}`, 'Ingresos']} />
+                    <Bar dataKey="ingresos" fill="#3b82f6" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="settings">
-          <Card className="p-6 text-center">
-            <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-            <p className="text-muted-foreground">Configuración de facturación en desarrollo</p>
-            <p className="text-sm">Configurar impuestos, numeración, plantillas de factura, etc.</p>
-          </Card>
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Settings className="h-5 w-5" />
+                  Configuración de Facturación
+                </CardTitle>
+                <CardDescription>
+                  Configura impuestos, numeración y plantillas de factura
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    <h3 className="font-semibold">Configuración de Impuestos</h3>
+                    <div className="space-y-2">
+                      <Label htmlFor="tax-rate">Tasa de Impuesto (%)</Label>
+                      <Input id="tax-rate" type="number" defaultValue="16" min="0" max="100" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="tax-name">Nombre del Impuesto</Label>
+                      <Input id="tax-name" defaultValue="IVA" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="tax-number">Número de Identificación Fiscal</Label>
+                      <Input id="tax-number" placeholder="RFC, NIT, etc." />
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <h3 className="font-semibold">Numeración de Facturas</h3>
+                    <div className="space-y-2">
+                      <Label htmlFor="invoice-prefix">Prefijo de Factura</Label>
+                      <Input id="invoice-prefix" defaultValue="FAC-" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="invoice-start">Número Inicial</Label>
+                      <Input id="invoice-start" type="number" defaultValue="1000" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="invoice-digits">Dígitos Mínimos</Label>
+                      <Select defaultValue="4">
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="3">3 dígitos (001)</SelectItem>
+                          <SelectItem value="4">4 dígitos (0001)</SelectItem>
+                          <SelectItem value="5">5 dígitos (00001)</SelectItem>
+                          <SelectItem value="6">6 dígitos (000001)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h3 className="font-semibold">Plantilla de Factura</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="company-name">Nombre de la Empresa</Label>
+                      <Input id="company-name" placeholder="Mi Empresa S.A." />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="company-address">Dirección</Label>
+                      <Input id="company-address" placeholder="Calle 123, Ciudad" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="company-phone">Teléfono</Label>
+                      <Input id="company-phone" placeholder="+1 234 567 8900" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="company-email">Email</Label>
+                      <Input id="company-email" type="email" placeholder="info@empresa.com" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="footer-text">Texto del Pie de Página</Label>
+                    <Textarea 
+                      id="footer-text" 
+                      placeholder="Gracias por su compra. Términos y condiciones aplican."
+                      rows={3}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button>
+                    <Receipt className="h-4 w-4 mr-2" />
+                    Guardar Configuración
+                  </Button>
+                  <Button variant="outline">
+                    Vista Previa de Factura
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
       </Tabs>
     </div>

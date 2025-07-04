@@ -32,6 +32,8 @@ const configMenuItems = [
   { title: "Compañía", url: "/admin/company", icon: Settings },
   { title: "APIs", url: "/admin/apis", icon: Youtube },
   { title: "Pedidos", url: "/admin/orders", icon: FileText },
+  { title: "Correo", url: "/admin/email", icon: Settings },
+  { title: "Notificaciones", url: "/admin/notifications", icon: Settings },
   { title: "Personalización", url: "/admin/customization", icon: Settings },
   { title: "Métodos de Pago", url: "/admin/payments", icon: Settings },
   { title: "Usuarios", url: "/admin/users", icon: Users },
