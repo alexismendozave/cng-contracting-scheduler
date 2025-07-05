@@ -114,8 +114,12 @@ export const NewAvailabilityCalendar = ({
       setBookingCounts(bookingCountsArray);
       
       // Set booking limits
-      const maxPerSlot = settingsData?.find(s => s.setting_key === 'max_bookings_per_time_slot')?.setting_value?.value || 5;
-      const maxPerDay = settingsData?.find(s => s.setting_key === 'max_bookings_per_day')?.setting_value?.value || 20;
+      const maxPerSlot = settingsData?.find(s => s.setting_key === 'max_bookings_per_time_slot')?.setting_value 
+        ? (settingsData.find(s => s.setting_key === 'max_bookings_per_time_slot')!.setting_value as any).value || 5
+        : 5;
+      const maxPerDay = settingsData?.find(s => s.setting_key === 'max_bookings_per_day')?.setting_value 
+        ? (settingsData.find(s => s.setting_key === 'max_bookings_per_day')!.setting_value as any).value || 20
+        : 20;
       setMaxBookingsPerSlot(maxPerSlot);
       setMaxBookingsPerDay(maxPerDay);
 

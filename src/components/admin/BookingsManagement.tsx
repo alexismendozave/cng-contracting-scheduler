@@ -19,6 +19,7 @@ interface Booking {
   scheduled_date: string;
   scheduled_time: string;
   status: string;
+  booking_status: string;
   total_amount: number;
   service_id: string;
   zone_id: string;
@@ -63,7 +64,13 @@ export default function BookingsManagement() {
         `)
         .order('created_at', { ascending: false });
       
-      setBookings(data || []);
+      // Map the data to ensure booking_status is set correctly
+      const mappedData = data?.map(booking => ({
+        ...booking,
+        booking_status: booking.booking_status || booking.status || 'pending_confirmation'
+      })) || [];
+      
+      setBookings(mappedData as Booking[]);
     } catch (error) {
       console.error('Error fetching bookings:', error);
       toast.error('Error al cargar reservas');

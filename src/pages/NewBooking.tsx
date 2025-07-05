@@ -11,6 +11,7 @@ import AddressSelection from "@/components/booking/AddressSelection";
 import CustomerDetails from "@/components/booking/CustomerDetails";
 import PaymentSelection from "@/components/booking/PaymentSelection";
 import BookingSummary from "@/components/booking/BookingSummary";
+import { Calendar } from "@/components/booking/Calendar";
 
 interface Service {
   id: string;
@@ -36,6 +37,9 @@ interface BookingData {
   longitude?: number;
   zone?: Zone;
   finalPrice?: number;
+  selectedDate?: string;
+  selectedTime?: string;
+  slotId?: string;
   customerData?: {
     firstName: string;
     lastName: string;
@@ -63,9 +67,10 @@ const NewBooking = () => {
   const steps = [
     { number: 1, title: "Seleccionar Servicio", icon: "🔧" },
     { number: 2, title: "Dirección", icon: "📍" },
-    { number: 3, title: "Datos del Cliente", icon: "👤" },
-    { number: 4, title: "Método de Pago", icon: "💳" },
-    { number: 5, title: "Resumen", icon: "📋" }
+    { number: 3, title: "Fecha y Hora", icon: "📅" },
+    { number: 4, title: "Datos del Cliente", icon: "👤" },
+    { number: 5, title: "Método de Pago", icon: "💳" },
+    { number: 6, title: "Resumen", icon: "📋" }
   ];
 
   useEffect(() => {
@@ -108,14 +113,22 @@ const NewBooking = () => {
         }));
         break;
       case 3:
-        setBookingData(prev => ({ ...prev, customerData: stepData }));
+        setBookingData(prev => ({ 
+          ...prev, 
+          selectedDate: stepData.date,
+          selectedTime: stepData.time,
+          slotId: stepData.slotId
+        }));
         break;
       case 4:
+        setBookingData(prev => ({ ...prev, customerData: stepData }));
+        break;
+      case 5:
         setBookingData(prev => ({ ...prev, paymentMethod: stepData }));
         break;
     }
     
-    if (currentStep < 5) {
+    if (currentStep < 6) {
       setCurrentStep(currentStep + 1);
     }
   };
@@ -141,7 +154,10 @@ const NewBooking = () => {
         longitude: bookingData.longitude,
         zone_id: bookingData.zone?.id,
         total_amount: bookingData.finalPrice,
-        status: 'pending'
+        scheduled_date: bookingData.selectedDate,
+        scheduled_time: bookingData.selectedTime,
+        status: 'pending',
+        booking_status: 'pending_confirmation'
       };
 
       const { error } = await supabase
@@ -178,20 +194,36 @@ const NewBooking = () => {
         );
       case 3:
         return (
+          <div className="space-y-4">
+            <div className="text-center mb-4">
+              <h3 className="text-lg font-semibold">Selecciona fecha y hora</h3>
+              <p className="text-muted-foreground">Elige el día y horario que mejor te convenga</p>
+            </div>
+            <Calendar
+              selectedDate={bookingData.selectedDate}
+              selectedTime={bookingData.selectedTime}
+              onDateTimeSelect={(date: string, time: string, slotId: string) => {
+                handleStepComplete({ date, time, slotId });
+              }}
+            />
+          </div>
+        );
+      case 4:
+        return (
           <CustomerDetails
             initialData={bookingData.customerData}
             defaultAddress={bookingData.address}
             onComplete={handleStepComplete}
           />
         );
-      case 4:
+      case 5:
         return (
           <PaymentSelection
             totalAmount={bookingData.finalPrice || 0}
             onPaymentSelect={handleStepComplete}
           />
         );
-      case 5:
+      case 6:
         return (
           <BookingSummary
             bookingData={bookingData}
