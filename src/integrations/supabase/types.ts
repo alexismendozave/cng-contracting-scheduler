@@ -39,18 +39,100 @@ export type Database = {
         }
         Relationships: []
       }
+      availability_slots: {
+        Row: {
+          created_at: string | null
+          date: string
+          end_time: string
+          handyman_id: string | null
+          id: string
+          is_booked: boolean | null
+          start_time: string
+        }
+        Insert: {
+          created_at?: string | null
+          date: string
+          end_time: string
+          handyman_id?: string | null
+          id?: string
+          is_booked?: boolean | null
+          start_time: string
+        }
+        Update: {
+          created_at?: string | null
+          date?: string
+          end_time?: string
+          handyman_id?: string | null
+          id?: string
+          is_booked?: boolean | null
+          start_time?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "availability_slots_handyman_id_fkey"
+            columns: ["handyman_id"]
+            isOneToOne: false
+            referencedRelation: "handymen"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      booking_history: {
+        Row: {
+          booking_id: string | null
+          changed_by_user_id: string | null
+          id: string
+          notes: string | null
+          status_change: string
+          timestamp: string | null
+        }
+        Insert: {
+          booking_id?: string | null
+          changed_by_user_id?: string | null
+          id?: string
+          notes?: string | null
+          status_change: string
+          timestamp?: string | null
+        }
+        Update: {
+          booking_id?: string | null
+          changed_by_user_id?: string | null
+          id?: string
+          notes?: string | null
+          status_change?: string
+          timestamp?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "booking_history_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bookings: {
         Row: {
           address: string | null
+          booked_date: string | null
+          booked_time: string | null
+          booking_status: string | null
           created_at: string | null
           customer_email: string
+          customer_geolocation: unknown | null
           customer_name: string
           customer_phone: string | null
+          final_price: number | null
+          handyman_id: string | null
           id: string
           latitude: number | null
           longitude: number | null
           notes: string | null
+          payment_method: string | null
+          payment_status: string | null
           requires_call: boolean | null
+          reservation_price_paid: number | null
           scheduled_date: string | null
           scheduled_time: string | null
           service_id: string | null
@@ -62,15 +144,24 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          booked_date?: string | null
+          booked_time?: string | null
+          booking_status?: string | null
           created_at?: string | null
           customer_email: string
+          customer_geolocation?: unknown | null
           customer_name: string
           customer_phone?: string | null
+          final_price?: number | null
+          handyman_id?: string | null
           id?: string
           latitude?: number | null
           longitude?: number | null
           notes?: string | null
+          payment_method?: string | null
+          payment_status?: string | null
           requires_call?: boolean | null
+          reservation_price_paid?: number | null
           scheduled_date?: string | null
           scheduled_time?: string | null
           service_id?: string | null
@@ -82,15 +173,24 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          booked_date?: string | null
+          booked_time?: string | null
+          booking_status?: string | null
           created_at?: string | null
           customer_email?: string
+          customer_geolocation?: unknown | null
           customer_name?: string
           customer_phone?: string | null
+          final_price?: number | null
+          handyman_id?: string | null
           id?: string
           latitude?: number | null
           longitude?: number | null
           notes?: string | null
+          payment_method?: string | null
+          payment_status?: string | null
           requires_call?: boolean | null
+          reservation_price_paid?: number | null
           scheduled_date?: string | null
           scheduled_time?: string | null
           service_id?: string | null
@@ -101,6 +201,13 @@ export type Database = {
           zone_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "bookings_handyman_id_fkey"
+            columns: ["handyman_id"]
+            isOneToOne: false
+            referencedRelation: "handymen"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "bookings_service_id_fkey"
             columns: ["service_id"]
@@ -116,6 +223,120 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      customers: {
+        Row: {
+          address: string | null
+          created_at: string | null
+          email: string
+          id: string
+          name: string
+          phone: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string | null
+          email: string
+          id?: string
+          name: string
+          phone?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          address?: string | null
+          created_at?: string | null
+          email?: string
+          id?: string
+          name?: string
+          phone?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      email_logs: {
+        Row: {
+          booking_id: string | null
+          error_message: string | null
+          id: string
+          recipient_email: string
+          sent_at: string | null
+          status: string | null
+          subject: string | null
+          template_id: string | null
+        }
+        Insert: {
+          booking_id?: string | null
+          error_message?: string | null
+          id?: string
+          recipient_email: string
+          sent_at?: string | null
+          status?: string | null
+          subject?: string | null
+          template_id?: string | null
+        }
+        Update: {
+          booking_id?: string | null
+          error_message?: string | null
+          id?: string
+          recipient_email?: string
+          sent_at?: string | null
+          status?: string | null
+          subject?: string | null
+          template_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_logs_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_logs_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "email_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_templates: {
+        Row: {
+          body_html: string | null
+          body_plain: string | null
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          subject: string
+          updated_at: string | null
+        }
+        Insert: {
+          body_html?: string | null
+          body_plain?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          subject: string
+          updated_at?: string | null
+        }
+        Update: {
+          body_html?: string | null
+          body_plain?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          subject?: string
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       general_settings: {
         Row: {
@@ -138,6 +359,45 @@ export type Database = {
           setting_key?: string
           setting_value?: Json | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      handymen: {
+        Row: {
+          availability_calendar_id: string | null
+          created_at: string | null
+          email: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          phone: string | null
+          specialties: string[] | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          availability_calendar_id?: string | null
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          phone?: string | null
+          specialties?: string[] | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          availability_calendar_id?: string | null
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          phone?: string | null
+          specialties?: string[] | null
+          updated_at?: string | null
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -185,6 +445,53 @@ export type Database = {
           webhook_url?: string | null
         }
         Relationships: []
+      }
+      payments: {
+        Row: {
+          amount: number
+          booking_id: string | null
+          created_at: string | null
+          currency: string | null
+          gateway: string | null
+          id: string
+          payment_type: string | null
+          status: string | null
+          transaction_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          amount: number
+          booking_id?: string | null
+          created_at?: string | null
+          currency?: string | null
+          gateway?: string | null
+          id?: string
+          payment_type?: string | null
+          status?: string | null
+          transaction_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          amount?: number
+          booking_id?: string | null
+          created_at?: string | null
+          currency?: string | null
+          gateway?: string | null
+          id?: string
+          payment_type?: string | null
+          status?: string | null
+          transaction_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -270,9 +577,12 @@ export type Database = {
           deposit_type: string | null
           description: string | null
           duration_minutes: number | null
+          handyman_ids: string[] | null
           id: string
           is_active: boolean | null
+          is_reservable: boolean | null
           name: string
+          reservation_price: number | null
           updated_at: string | null
         }
         Insert: {
@@ -283,9 +593,12 @@ export type Database = {
           deposit_type?: string | null
           description?: string | null
           duration_minutes?: number | null
+          handyman_ids?: string[] | null
           id?: string
           is_active?: boolean | null
+          is_reservable?: boolean | null
           name: string
+          reservation_price?: number | null
           updated_at?: string | null
         }
         Update: {
@@ -296,9 +609,12 @@ export type Database = {
           deposit_type?: string | null
           description?: string | null
           duration_minutes?: number | null
+          handyman_ids?: string[] | null
           id?: string
           is_active?: boolean | null
+          is_reservable?: boolean | null
           name?: string
+          reservation_price?: number | null
           updated_at?: string | null
         }
         Relationships: []
