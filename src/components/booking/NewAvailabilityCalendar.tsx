@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
-import { Calendar as CalendarIcon, Clock } from "lucide-react";
+import { Calendar as CalendarIcon, Clock, Check, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -35,6 +36,65 @@ interface CalendarProps {
   onDateTimeSelect: (date: string, time: string, slotId: string) => void;
 }
 
+interface ConfirmationDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  selectedDate: string;
+  selectedTime: string;
+  onConfirm: () => void;
+}
+
+const ConfirmationDialog = ({ open, onOpenChange, selectedDate, selectedTime, onConfirm }: ConfirmationDialogProps) => {
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('es-ES', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long', 
+      day: 'numeric'
+    });
+  };
+
+  const formatTime = (time: string) => {
+    return new Date(`2000-01-01T${time}`).toLocaleTimeString('es-ES', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Confirmar Fecha y Hora</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="text-center space-y-2">
+            <div className="text-lg font-semibold">
+              📅 {formatDate(selectedDate)}
+            </div>
+            <div className="text-lg font-semibold text-primary">
+              🕐 {formatTime(selectedTime)}
+            </div>
+          </div>
+          <p className="text-sm text-muted-foreground text-center">
+            ¿Confirmas esta fecha y hora para tu reserva?
+          </p>
+          <div className="flex gap-2 pt-4">
+            <Button variant="outline" onClick={() => onOpenChange(false)} className="flex-1">
+              <X className="h-4 w-4 mr-2" />
+              Cambiar
+            </Button>
+            <Button onClick={onConfirm} className="flex-1">
+              <Check className="h-4 w-4 mr-2" />
+              Confirmar
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 export const NewAvailabilityCalendar = ({ 
   selectedDate, 
   selectedTime, 
@@ -47,6 +107,9 @@ export const NewAvailabilityCalendar = ({
   const [maxBookingsPerDay, setMaxBookingsPerDay] = useState<number>(20);
   const [loading, setLoading] = useState(true);
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [tempSelectedDate, setTempSelectedDate] = useState<string>("");
+  const [tempSelectedTime, setTempSelectedTime] = useState<string>("");
+  const [showConfirmation, setShowConfirmation] = useState(false);
 
   useEffect(() => {
     fetchAvailabilityData();
@@ -114,11 +177,11 @@ export const NewAvailabilityCalendar = ({
       setBookingCounts(bookingCountsArray);
       
       // Set booking limits
-      const maxPerSlot = settingsData?.find(s => s.setting_key === 'max_bookings_per_time_slot')?.setting_value 
-        ? (settingsData.find(s => s.setting_key === 'max_bookings_per_time_slot')!.setting_value as any).value || 5
+      const maxPerSlot = typeof settingsData?.find(s => s.setting_key === 'max_bookings_per_time_slot')?.setting_value === 'number' 
+        ? Number(settingsData.find(s => s.setting_key === 'max_bookings_per_time_slot')?.setting_value) 
         : 5;
-      const maxPerDay = settingsData?.find(s => s.setting_key === 'max_bookings_per_day')?.setting_value 
-        ? (settingsData.find(s => s.setting_key === 'max_bookings_per_day')!.setting_value as any).value || 20
+      const maxPerDay = typeof settingsData?.find(s => s.setting_key === 'max_bookings_per_day')?.setting_value === 'number'
+        ? Number(settingsData.find(s => s.setting_key === 'max_bookings_per_day')?.setting_value)
         : 20;
       setMaxBookingsPerSlot(maxPerSlot);
       setMaxBookingsPerDay(maxPerDay);
@@ -217,10 +280,32 @@ export const NewAvailabilityCalendar = ({
 
   const handleSlotSelect = (date: string, time: string) => {
     if (isSlotAvailable(date, time)) {
-      onDateTimeSelect(date, time, `${date}-${time}`);
+      setTempSelectedDate(date);
+      setTempSelectedTime(time);
+      setShowConfirmation(true);
     } else {
       toast.error('Este horario ya no está disponible');
     }
+  };
+
+  const handleConfirmSelection = () => {
+    if (tempSelectedDate && tempSelectedTime) {
+      onDateTimeSelect(tempSelectedDate, tempSelectedTime, `${tempSelectedDate}-${tempSelectedTime}`);
+      setShowConfirmation(false);
+      setTempSelectedDate("");
+      setTempSelectedTime("");
+    }
+  };
+
+  const handleDayClick = (dateString: string) => {
+    setTempSelectedDate(dateString);
+    // Scroll to time slots
+    setTimeout(() => {
+      const slotsElement = document.querySelector('[data-time-slots]');
+      if (slotsElement) {
+        slotsElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 100);
   };
 
   const formatTime = (time: string) => {
@@ -310,7 +395,7 @@ export const NewAvailabilityCalendar = ({
             const dateString = day.toISOString().split('T')[0];
             const slots = getAvailableSlotsForDate(day);
             const hasSlots = slots.length > 0;
-            const isSelected = selectedDate === dateString;
+            const isSelected = tempSelectedDate === dateString || selectedDate === dateString;
             const isPast = day < new Date(new Date().setHours(0, 0, 0, 0));
             const isNonWorkingDay = nonWorkingDays.some(nwd => nwd.date === dateString);
             const dayBookingCount = getDayBookingCount(dateString);
@@ -343,9 +428,7 @@ export const NewAvailabilityCalendar = ({
                     ? 'hover:bg-primary/10 border-primary/20 cursor-pointer' 
                     : 'border-border cursor-not-allowed opacity-75'
                 } ${isSelected ? 'bg-primary/20 border-primary' : ''}`}
-                onClick={hasSlots && !isPast && !isNonWorkingDay ? () => {
-                  onDateTimeSelect(dateString, '', '');
-                } : undefined}
+                onClick={hasSlots && !isPast && !isNonWorkingDay ? () => handleDayClick(dateString) : undefined}
               >
                 <div className="text-sm font-medium">{day.getDate()}</div>
                 <Badge variant="secondary" className={`text-xs mt-1 ${statusColor}`}>
@@ -357,27 +440,39 @@ export const NewAvailabilityCalendar = ({
         </div>
 
         {/* Available Time Slots */}
-        {selectedDate && (
-          <div className="mt-6">
+        {(tempSelectedDate || selectedDate) && (
+          <div className="mt-6" data-time-slots>
             <h4 className="font-medium mb-3 flex items-center gap-2">
               <Clock className="h-4 w-4" />
-              Horas Disponibles
+              Horas Disponibles {tempSelectedDate && !tempSelectedTime && (
+                <Badge variant="destructive" className="ml-2">Obligatorio</Badge>
+              )}
             </h4>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
               {(() => {
-                const selectedDateObj = new Date(selectedDate);
+                const targetDate = tempSelectedDate || selectedDate;
+                const selectedDateObj = new Date(targetDate!);
                 const slots = getAvailableSlotsForDate(selectedDateObj);
                 
+                if (slots.length === 0) {
+                  return (
+                    <div className="col-span-full text-center py-8 text-muted-foreground">
+                      No hay horarios disponibles para esta fecha
+                    </div>
+                  );
+                }
+                
                 return slots.map(slot => {
-                  const bookingCount = getBookingCountForSlot(selectedDate, slot.start);
-                  const isAvailable = isSlotAvailable(selectedDate, slot.start);
+                  const bookingCount = getBookingCountForSlot(targetDate!, slot.start);
+                  const isAvailable = isSlotAvailable(targetDate!, slot.start);
+                  const isCurrentlySelected = (tempSelectedTime === slot.start) || (selectedTime === slot.start && !tempSelectedDate);
                   
                   return (
                     <Button
                       key={slot.id}
-                      variant={selectedTime === slot.start ? "default" : "outline"}
+                      variant={isCurrentlySelected ? "default" : "outline"}
                       size="sm"
-                      onClick={() => handleSlotSelect(selectedDate, slot.start)}
+                      onClick={() => handleSlotSelect(targetDate!, slot.start)}
                       disabled={!isAvailable}
                       className="text-sm flex flex-col p-3 h-auto"
                     >
@@ -390,8 +485,23 @@ export const NewAvailabilityCalendar = ({
                 });
               })()}
             </div>
+            {tempSelectedDate && !tempSelectedTime && (
+              <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                <p className="text-sm text-yellow-800">
+                  ⚠️ <strong>Debes seleccionar una hora</strong> para continuar con tu reserva.
+                </p>
+              </div>
+            )}
           </div>
         )}
+
+        <ConfirmationDialog
+          open={showConfirmation}
+          onOpenChange={setShowConfirmation}
+          selectedDate={tempSelectedDate}
+          selectedTime={tempSelectedTime}
+          onConfirm={handleConfirmSelection}
+        />
       </CardContent>
     </Card>
   );

@@ -67,7 +67,10 @@ export default function BookingsManagement() {
       // Map the data to ensure booking_status is set correctly
       const mappedData = data?.map(booking => ({
         ...booking,
-        booking_status: booking.booking_status || booking.status || 'pending_confirmation'
+        booking_status: booking.booking_status || booking.status || 'pending_confirmation',
+        services: booking.services || null,
+        zones: booking.zones || null,
+        handymen: booking.handymen || null
       })) || [];
       
       setBookings(mappedData as Booking[]);

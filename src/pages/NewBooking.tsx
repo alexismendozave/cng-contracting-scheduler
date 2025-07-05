@@ -113,6 +113,11 @@ const NewBooking = () => {
         }));
         break;
       case 3:
+        // Validar que se hayan seleccionado tanto fecha como hora
+        if (!stepData.date || !stepData.time) {
+          toast.error('Debes seleccionar fecha y hora para continuar');
+          return;
+        }
         setBookingData(prev => ({ 
           ...prev, 
           selectedDate: stepData.date,
@@ -203,9 +208,32 @@ const NewBooking = () => {
               selectedDate={bookingData.selectedDate}
               selectedTime={bookingData.selectedTime}
               onDateTimeSelect={(date: string, time: string, slotId: string) => {
-                handleStepComplete({ date, time, slotId });
+                // No auto-advance, just update the booking data
+                setBookingData(prev => ({
+                  ...prev,
+                  selectedDate: date,
+                  selectedTime: time,
+                  slotId: slotId
+                }));
               }}
             />
+            
+            {/* Continue Button - Only show when both date and time are selected */}
+            {bookingData.selectedDate && bookingData.selectedTime && (
+              <div className="mt-6 flex justify-center">
+                <Button 
+                  onClick={() => handleStepComplete({ 
+                    date: bookingData.selectedDate, 
+                    time: bookingData.selectedTime, 
+                    slotId: bookingData.slotId 
+                  })}
+                  size="lg"
+                  className="px-8"
+                >
+                  Continuar con los Datos del Cliente
+                </Button>
+              </div>
+            )}
           </div>
         );
       case 4:
