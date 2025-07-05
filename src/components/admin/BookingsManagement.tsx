@@ -7,6 +7,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Calendar, List, Plus, Eye, Edit, Clock, DollarSign, User, Mail, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import { InteractiveBookingCalendar } from "./InteractiveBookingCalendar";
+import { BookingDetailsDialog } from "./BookingDetailsDialog";
+import { NewBookingDialog } from "./NewBookingDialog";
 
 interface Booking {
   id: string;
@@ -70,14 +72,20 @@ export default function BookingsManagement() {
     }
   };
 
+  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
+  const [newBookingDialogOpen, setNewBookingDialogOpen] = useState(false);
+
   const handleViewBooking = (bookingId: string) => {
-    // TODO: Implementar vista detallada de reserva
-    toast.info('Vista detallada próximamente');
+    const booking = bookings.find(b => b.id === bookingId);
+    if (booking) {
+      setSelectedBooking(booking);
+      setDetailsDialogOpen(true);
+    }
   };
 
   const handleEditBooking = (bookingId: string) => {
-    // TODO: Implementar edición de reserva
-    toast.info('Edición de reservas próximamente');
+    handleViewBooking(bookingId);
   };
 
   const BookingCard = ({ booking }: { booking: Booking }) => (
@@ -148,7 +156,7 @@ export default function BookingsManagement() {
           <h1 className="text-3xl font-bold">Gestión de Reservas</h1>
           <p className="text-muted-foreground">Administra y visualiza todas las reservas</p>
         </div>
-        <Button>
+        <Button onClick={() => setNewBookingDialogOpen(true)}>
           <Plus className="h-4 w-4 mr-2" />
           Nueva Reserva
         </Button>
@@ -188,6 +196,19 @@ export default function BookingsManagement() {
           <CalendarView />
         </TabsContent>
       </Tabs>
+
+      <BookingDetailsDialog 
+        booking={selectedBooking}
+        open={detailsDialogOpen}
+        onOpenChange={setDetailsDialogOpen}
+        onBookingUpdated={fetchBookings}
+      />
+
+      <NewBookingDialog
+        open={newBookingDialogOpen}
+        onOpenChange={setNewBookingDialogOpen}
+        onBookingCreated={fetchBookings}
+      />
     </div>
   );
 }

@@ -112,6 +112,30 @@ export type Database = {
           },
         ]
       }
+      booking_settings: {
+        Row: {
+          created_at: string | null
+          id: string
+          setting_key: string
+          setting_value: Json | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          setting_key: string
+          setting_value?: Json | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          setting_key?: string
+          setting_value?: Json | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       bookings: {
         Row: {
           address: string | null
@@ -401,6 +425,30 @@ export type Database = {
         }
         Relationships: []
       }
+      non_working_days: {
+        Row: {
+          created_at: string | null
+          date: string
+          id: string
+          is_active: boolean | null
+          reason: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          date: string
+          id?: string
+          is_active?: boolean | null
+          reason?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          date?: string
+          id?: string
+          is_active?: boolean | null
+          reason?: string | null
+        }
+        Relationships: []
+      }
       payment_methods: {
         Row: {
           client_id: string | null
@@ -615,6 +663,48 @@ export type Database = {
           is_reservable?: boolean | null
           name?: string
           reservation_price?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      weekly_availability: {
+        Row: {
+          created_at: string | null
+          day_of_week: number
+          id: string
+          is_active: boolean | null
+          time_slot_1_end: string | null
+          time_slot_1_start: string | null
+          time_slot_2_end: string | null
+          time_slot_2_start: string | null
+          time_slot_3_end: string | null
+          time_slot_3_start: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          day_of_week: number
+          id?: string
+          is_active?: boolean | null
+          time_slot_1_end?: string | null
+          time_slot_1_start?: string | null
+          time_slot_2_end?: string | null
+          time_slot_2_start?: string | null
+          time_slot_3_end?: string | null
+          time_slot_3_start?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          day_of_week?: number
+          id?: string
+          is_active?: boolean | null
+          time_slot_1_end?: string | null
+          time_slot_1_start?: string | null
+          time_slot_2_end?: string | null
+          time_slot_2_start?: string | null
+          time_slot_3_end?: string | null
+          time_slot_3_start?: string | null
           updated_at?: string | null
         }
         Relationships: []
