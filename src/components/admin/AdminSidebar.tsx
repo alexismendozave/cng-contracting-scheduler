@@ -25,6 +25,8 @@ const mainMenuItems = [
   { title: "Dashboard", url: "/admin/dashboard", icon: Settings },
   { title: "Servicios", url: "/admin/services", icon: FileText },
   { title: "Reservas", url: "/admin/bookings", icon: Calendar },
+  { title: "Técnicos", url: "/admin/handymen", icon: Users },
+  { title: "Disponibilidad", url: "/admin/availability", icon: Calendar },
   { title: "Zonas", url: "/admin/zones", icon: Zap },
 ];
 

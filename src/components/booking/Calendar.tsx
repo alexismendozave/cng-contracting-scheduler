@@ -42,10 +42,17 @@ export const Calendar = ({
       const startOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
       const endOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
 
+      // Solo mostrar slots disponibles (no reservados) y futuros
+      const today = new Date().toISOString().split('T')[0];
+      
       let query = supabase
         .from('availability_slots')
-        .select('*')
+        .select(`
+          *,
+          handymen(name)
+        `)
         .eq('is_booked', false)
+        .gte('date', today) // Solo fechas futuras
         .gte('date', startOfMonth.toISOString().split('T')[0])
         .lte('date', endOfMonth.toISOString().split('T')[0])
         .order('date')
@@ -190,11 +197,15 @@ export const Calendar = ({
             return (
               <div
                 key={index}
-                className={`p-2 min-h-[60px] border rounded cursor-pointer transition-colors ${
+                className={`p-2 min-h-[60px] border rounded transition-colors ${
                   hasSlots 
-                    ? 'hover:bg-primary/10 border-primary/20' 
+                    ? 'hover:bg-primary/10 border-primary/20 cursor-pointer' 
                     : 'border-border cursor-not-allowed opacity-50'
                 } ${isSelected ? 'bg-primary/20 border-primary' : ''}`}
+                onClick={hasSlots ? () => {
+                  const dateString = day.toISOString().split('T')[0];
+                  onDateTimeSelect(dateString, '', '');
+                } : undefined}
               >
                 <div className="text-sm font-medium">{day.getDate()}</div>
                 {hasSlots && (

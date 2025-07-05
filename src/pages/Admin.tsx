@@ -17,6 +17,8 @@ import ApiConfigurationWrapper from "@/components/admin/wrappers/ApiConfiguratio
 import OrdersManagement from "@/components/admin/OrdersManagement";
 import EmailConfiguration from "@/components/admin/EmailConfiguration";
 import NotificationsManagement from "@/components/admin/NotificationsManagement";
+import { HandymenManagement } from "@/components/admin/HandymenManagement";
+import { AvailabilityManagement } from "@/components/admin/AvailabilityManagement";
 
 const Admin = () => {
   const { profile, signOut } = useAuth();
@@ -58,6 +60,8 @@ const Admin = () => {
               <Route path="orders" element={<OrdersManagement />} />
               <Route path="email" element={<EmailConfiguration />} />
               <Route path="notifications" element={<NotificationsManagement />} />
+              <Route path="handymen" element={<HandymenManagement />} />
+              <Route path="availability" element={<AvailabilityManagement />} />
               <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
             </Routes>
           </main>

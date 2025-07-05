@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { Calendar, List, Plus, Eye, Edit, Clock, DollarSign, User, Mail, MapPin } from "lucide-react";
 import { toast } from "sonner";
+import { InteractiveBookingCalendar } from "./InteractiveBookingCalendar";
 
 interface Booking {
   id: string;
@@ -52,8 +53,12 @@ export default function BookingsManagement() {
     try {
       const { data } = await supabase
         .from('bookings')
-        .select('*')
-        .in('status', ['pending', 'confirmed', 'paid', 'cancelled'])
+        .select(`
+          *,
+          services(name, description),
+          zones(name),
+          handymen(name)
+        `)
         .order('created_at', { ascending: false });
       
       setBookings(data || []);
@@ -63,6 +68,16 @@ export default function BookingsManagement() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleViewBooking = (bookingId: string) => {
+    // TODO: Implementar vista detallada de reserva
+    toast.info('Vista detallada próximamente');
+  };
+
+  const handleEditBooking = (bookingId: string) => {
+    // TODO: Implementar edición de reserva
+    toast.info('Edición de reservas próximamente');
   };
 
   const BookingCard = ({ booking }: { booking: Booking }) => (
@@ -101,11 +116,11 @@ export default function BookingsManagement() {
           </div>
         </div>
         <div className="flex gap-2 pt-2">
-          <Button size="sm" variant="outline" onClick={() => console.log('Ver reserva:', booking.id)}>
+          <Button size="sm" variant="outline" onClick={() => handleViewBooking(booking.id)}>
             <Eye className="h-4 w-4 mr-1" />
             Ver
           </Button>
-          <Button size="sm" variant="outline" onClick={() => console.log('Editar reserva:', booking.id)}>
+          <Button size="sm" variant="outline" onClick={() => handleEditBooking(booking.id)}>
             <Edit className="h-4 w-4 mr-1" />
             Editar
           </Button>
@@ -115,34 +130,7 @@ export default function BookingsManagement() {
   );
 
   const CalendarView = () => {
-    // Filtrar reservas para mostrar solo las que deben aparecer en calendario
-    const calendarBookings = bookings.filter(booking => 
-      ['pending', 'confirmed', 'paid', 'cancelled'].includes(booking.status)
-    );
-
-    return (
-      <div className="grid gap-4">
-        <div className="flex justify-between items-center">
-          <h3 className="text-xl font-semibold">Vista de Calendario</h3>
-          <div className="flex gap-2">
-            {Object.entries(statusLabels).filter(([status]) => 
-              ['pending', 'confirmed', 'paid', 'cancelled'].includes(status)
-            ).map(([status, label]) => (
-              <Badge key={status} className={statusColors[status as keyof typeof statusColors]}>
-                {label}
-              </Badge>
-            ))}
-          </div>
-        </div>
-        <Card className="p-6">
-          <div className="text-center text-muted-foreground">
-            <Calendar className="h-12 w-12 mx-auto mb-4" />
-            <p>Vista de calendario con {calendarBookings.length} reservas</p>
-            <p className="text-sm">Calendario interactivo en desarrollo - se mostrarán reservas por fecha</p>
-          </div>
-        </Card>
-      </div>
-    );
+    return <InteractiveBookingCalendar />;
   };
 
   if (loading) {
